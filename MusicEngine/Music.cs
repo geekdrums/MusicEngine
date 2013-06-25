@@ -136,6 +136,19 @@ public class Music : MonoBehaviour {
 	public static void AddListener( IMusicListener listener ) { Listeners.Add( listener ); }
 
 #if ADX
+
+	[System.Serializable]
+	public class BlockInfo
+	{
+		public BlockInfo( string BlockName, int NumBar = 4 )
+		{
+			this.BlockName = BlockName;
+			this.NumBar = NumBar;
+		}
+		public string BlockName;
+		public int NumBar = 4;
+	}
+
 	public static void SetNextBlock( string blockName )
 	{
 		int index = Current.BlockInfos.FindIndex( ( BlockInfo info ) => info.BlockName==blockName );
@@ -213,8 +226,6 @@ public class Music : MonoBehaviour {
 	/// </summary>
 	public double Tempo_ = 128;
 
-	public List<BlockInfo> BlockInfos;
-
 	#region private params
 	//music current params
 	/// <summary>
@@ -245,7 +256,6 @@ public class Music : MonoBehaviour {
 	/// ADX上での現在再生中のブロック
 	/// </summary>
 	int CurrentBlockIndex;
-	int NumBlockBar { get { return BlockInfos[CurrentBlockIndex].NumBar; } }
 	/// <summary>
 	/// ADX上での次に再生する予定のブロック
 	/// (ADX上で勝手に遷移する場合は取得できない)
@@ -262,15 +272,19 @@ public class Music : MonoBehaviour {
 	CriAtomExPlayback playback;
 	CriAtomExAcb ACBData;
 	CriAtomEx.CueInfo CueInfo;
+	
+	public List<BlockInfo> BlockInfos;
+	int NumBlockBar { get { return BlockInfos[CurrentBlockIndex].NumBar; } }
+	long SamplesInBlock { get { return BlockInfos[CurrentBlockIndex].NumBar * SamplesPerBar; } }
+#else
+	readonly int NumBlockBar = 0;
 #endif
-
 
 	//readonly params
 	double MusicTimeUnit;
 	long SamplesPerUnit;
 	long SamplesPerBeat;
 	long SamplesPerBar;
-	long SamplesInBlock { get { return BlockInfos[CurrentBlockIndex].NumBar * SamplesPerBar; } }
 
 	//others
 	/// <summary>
@@ -336,7 +350,8 @@ public class Music : MonoBehaviour {
 #endif
 		if( numSamples >= 0 )
 		{
-			Just_.bar = (int)( numSamples / SamplesPerBar ) % NumBlockBar;
+			Just_.bar = (int)( numSamples / SamplesPerBar );
+			if ( NumBlockBar != 0 ) Just_.bar %= NumBlockBar;
 			Just_.beat = (int)( ( numSamples % SamplesPerBar ) / SamplesPerBeat );
 			Just_.unit = (int)( ( numSamples % SamplesPerBeat ) / SamplesPerUnit );
 			isFormerHalf_ = ( numSamples % SamplesPerUnit ) < SamplesPerUnit / 2;
@@ -344,25 +359,17 @@ public class Music : MonoBehaviour {
 
 			Now_.Copy( Just_ );
 			if ( !isFormerHalf_ ) Now_.Increment();
+#if ADX
 			if ( numSamples + SamplesPerUnit/2 >= SamplesInBlock )
 			{
 				Now_.Init();
 			}
+#endif
 
 			isNowChanged_ = Now_.totalUnit != Old.totalUnit;
 			isJustChanged_ = Just_.totalUnit != OldJust.totalUnit;
 
 			CallEvents();
-
-			if ( isJustChanged_ && Just_.totalUnit > 0 )
-			{
-				Timing tempOld = new Timing( OldJust );
-				tempOld.Increment();
-				if ( tempOld.totalUnit != Just_.totalUnit )
-				{
-					Debug.LogWarning( "Warning!! OldJust = " + OldJust.ToString() + ", Just = " + Just_.ToString() );
-				}
-			}
 
 			Old.Copy( Now_ );
 			OldJust.Copy( Just_ );
@@ -401,6 +408,16 @@ public class Music : MonoBehaviour {
 				OnBlockChanged();
 			}
 			OldBlockIndex = CurrentBlockIndex;
+		}
+
+		if ( isJustChanged_ && Just_.totalUnit > 0 )
+		{
+			Timing tempOld = new Timing( OldJust );
+			tempOld.Increment();
+			if ( tempOld.totalUnit != Just_.totalUnit )
+			{
+				Debug.LogWarning( "Warning!! OldJust = " + OldJust.ToString() + ", Just = " + Just_.ToString() );
+			}
 		}
 	}
 	#endregion
@@ -458,18 +475,5 @@ public class Music : MonoBehaviour {
 
 	void WillBlockChange()
 	{
-	}
-
-
-	[System.Serializable]
-	public class BlockInfo
-	{
-		public BlockInfo( string BlockName, int NumBar = 4 )
-		{
-			this.BlockName = BlockName;
-			this.NumBar = NumBar;
-		}
-		public string BlockName;
-		public int NumBar = 4;
 	}
 }
