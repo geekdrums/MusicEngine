@@ -1,3 +1,5 @@
+//#define ADX
+
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
@@ -14,6 +16,45 @@ using System.Collections.Generic;
 /// IMusicListenerは必要に応じて拡張予定です。
 /// </summary>
 public class Music : MonoBehaviour {
+	
+	public class SoundCue
+	{
+#if ADX
+		public SoundCue( CriAtomSource source ) { this.source = source; }
+		public CriAtomSource source { get; private set; }
+		public CriAtomExPlayer Player { get { return source.Player; } }
+#else
+		public SoundCue( AudioSource source ) { this.source = source; }
+		public AudioSource source { get; private set; }
+#endif
+
+		public void Play()
+		{
+			source.Play();
+		}
+		public void Stop()
+		{
+			source.Stop();
+		}
+		public void Pause()
+		{
+#if ADX
+			source.Stop();
+#else
+			source.Pause();
+#endif
+		}
+		public bool IsPlaying()
+		{
+#if ADX
+			return source.status == CriAtomSource.Status.Playing;
+#else
+			return source.isPlaying;
+#endif
+		}
+
+
+	}
 
 	/// <summary>
 	/// Get a currently playing music.
@@ -35,11 +76,10 @@ public class Music : MonoBehaviour {
 	public static Timing Just { get { return Current.Just_; } }
 	public static bool isJustChanged { get { return Current.isJustChanged_; } }
 	public static bool isNowChanged { get { return Current.isNowChanged_; } }
-	public static bool IsPlaying() { return Current.MusicSource.isPlaying; }
+	public static bool IsPlaying() { return Current.MusicSource.IsPlaying(); }
 	public static void Pause() { Current.MusicSource.Pause(); }
 	public static void Resume() { Current.MusicSource.Play(); }
 	public static void Stop() { Current.MusicSource.Stop(); }
-
 	/// <summary>
 	/// 一番近いJustから時間がどれだけ離れているかを符号付きで返す。
 	/// </summary>
@@ -92,9 +132,10 @@ public class Music : MonoBehaviour {
 	}
 
 	//static funcs
-	public static void QuantizePlay( AudioSource source ) { Current.QuantizedCue.Add( source ); }
+	public static void QuantizePlay( SoundCue source ) { Current.QuantizedCue.Add( source ); }
 	public static void AddListener( IMusicListener listener ) { Listeners.Add( listener ); }
-	/*
+
+#if ADX
 	public static void SetNextBlock( string blockName )
 	{
 		int index = Current.BlockInfos.FindIndex( ( BlockInfo info ) => info.BlockName==blockName );
@@ -131,7 +172,7 @@ public class Music : MonoBehaviour {
 		{
 			Current.NextBlockIndex = index;
 			Current.CurrentBlockIndex = index;
-			Current.AtomSource.Player.SetFirstBlockIndex( index );
+			Current.MusicSource.Player.SetFirstBlockIndex( index );
 		}
 		else
 		{
@@ -145,14 +186,14 @@ public class Music : MonoBehaviour {
 		{
 			Current.NextBlockIndex = index;
 			Current.CurrentBlockIndex = index;
-			Current.AtomSource.Player.SetFirstBlockIndex( index );
+			Current.MusicSource.Player.SetFirstBlockIndex( index );
 		}
 		else
 		{
 			Debug.LogError( "Error!! Music.SetFirstBlock Can't find block name: " + blockName );
 		}
 	}
-	*/
+#endif
 
 	//static readonlies
 	private static readonly int SamplingRate = 44100;
@@ -215,12 +256,14 @@ public class Music : MonoBehaviour {
 	/// </summary>
 	int numRepeat;
 
-	long numSamples;
+	SoundCue MusicSource;
+	List<SoundCue> QuantizedCue;
+#if ADX
+	CriAtomExPlayback playback;
+	CriAtomExAcb ACBData;
+	CriAtomEx.CueInfo CueInfo;
+#endif
 
-	//ADX2LE objects
-	AudioSource MusicSource;
-
-	List<AudioSource> QuantizedCue;
 
 	//readonly params
 	double MusicTimeUnit;
@@ -228,7 +271,6 @@ public class Music : MonoBehaviour {
 	long SamplesPerBeat;
 	long SamplesPerBar;
 	long SamplesInBlock { get { return BlockInfos[CurrentBlockIndex].NumBar * SamplesPerBar; } }
-	long SamplesInMusic;
 
 	//others
 	/// <summary>
@@ -242,8 +284,14 @@ public class Music : MonoBehaviour {
 	void Awake()
 	{
 		Current = this;
-		MusicSource = GetComponent<AudioSource>();
-		QuantizedCue = new List<AudioSource>();
+#if ADX
+		MusicSource = new SoundCue( GetComponent<CriAtomSource>() );
+		ACBData = CriAtom.GetAcb( MusicSource.source.cueSheet );
+		ACBData.GetCueInfo( MusicSource.source.cueName, out CueInfo );
+#else
+		MusicSource = new SoundCue( GetComponent<AudioSource>() );
+#endif
+		QuantizedCue = new List<SoundCue>();
 
 		SamplesPerUnit = (long)( SamplingRate * ( 60.0 / ( Tempo_ * mtBeat_ ) ) );
 		SamplesPerBeat = SamplesPerUnit*mtBeat_;
@@ -261,41 +309,68 @@ public class Music : MonoBehaviour {
 	void Start()
 	{
 		WillBlockChange();
+#if ADX
+		playback = MusicSource.source.Play();
+#else
 		MusicSource.Play();
+#endif
 		foreach ( IMusicListener listener in Listeners )
 		{
 			listener.OnMusicStarted();
 		}
 		OnBlockChanged();
 	}
-
+	
 	// Update is called once per frame
-	void Update()
-	{
-		//CurrentBlockIndex = playback.GetCurrentBlockIndex();
-
-		numSamples = MusicSource.timeSamples;
-
-		Just.bar = (int)( numSamples / SamplesPerBar ) % NumBlockBar;
-		Just.beat = (int)( ( numSamples % SamplesPerBar ) / SamplesPerBeat );
-		Just.unit = (int)( ( numSamples % SamplesPerBeat ) / SamplesPerUnit );
-		isFormerHalf_ = ( numSamples % SamplesPerUnit ) < SamplesPerUnit / 2;
-		dtFromJust_ = (double)( numSamples % SamplesPerUnit ) / (double)SamplingRate;
-
-		Now.Copy( Just );
-		if ( !isFormerHalf_ ) Now.Increment();
-		if ( numSamples + SamplesPerUnit/2 >= SamplesInBlock )
+	void Update () {
+		long numSamples;
+#if ADX
+		CurrentBlockIndex = playback.GetCurrentBlockIndex();
+		int tempOut;
+		if ( !playback.GetNumPlayedSamples( out numSamples, out tempOut ) )
 		{
-			Now.Init();
+			numSamples = -1;
 		}
+#else
+		numSamples = MusicSource.source.timeSamples;
+#endif
+		if( numSamples >= 0 )
+		{
+			Just_.bar = (int)( numSamples / SamplesPerBar ) % NumBlockBar;
+			Just_.beat = (int)( ( numSamples % SamplesPerBar ) / SamplesPerBeat );
+			Just_.unit = (int)( ( numSamples % SamplesPerBeat ) / SamplesPerUnit );
+			isFormerHalf_ = ( numSamples % SamplesPerUnit ) < SamplesPerUnit / 2;
+			dtFromJust_ = (double)( numSamples % SamplesPerUnit ) / (double)SamplingRate;
 
-		isNowChanged_ = Now.totalUnit != Old.totalUnit;
-		isJustChanged_ = Just.totalUnit != OldJust.totalUnit;
+			Now_.Copy( Just_ );
+			if ( !isFormerHalf_ ) Now_.Increment();
+			if ( numSamples + SamplesPerUnit/2 >= SamplesInBlock )
+			{
+				Now_.Init();
+			}
 
-		CallEvents();
+			isNowChanged_ = Now_.totalUnit != Old.totalUnit;
+			isJustChanged_ = Just_.totalUnit != OldJust.totalUnit;
 
-		Old.Copy( Now );
-		OldJust.Copy( Just );
+			CallEvents();
+
+			if ( isJustChanged_ && Just_.totalUnit > 0 )
+			{
+				Timing tempOld = new Timing( OldJust );
+				tempOld.Increment();
+				if ( tempOld.totalUnit != Just_.totalUnit )
+				{
+					Debug.LogWarning( "Warning!! OldJust = " + OldJust.ToString() + ", Just = " + Just_.ToString() );
+				}
+			}
+
+			Old.Copy( Now_ );
+			OldJust.Copy( Just_ );
+		}
+		else
+		{
+			Debug.LogWarning( "Warning!! Failed to GetNumPlayedSamples" );
+		}
 	}
 
 	void CallEvents()
@@ -343,9 +418,8 @@ public class Music : MonoBehaviour {
 
 	void OnJustChanged()
 	{
-		foreach ( AudioSource cue in QuantizedCue )
+		foreach ( SoundCue cue in QuantizedCue )
 		{
-			//cue.SetAisac( 2, 0 );
 			cue.Play();
 		}
 		QuantizedCue.Clear();
@@ -362,14 +436,6 @@ public class Music : MonoBehaviour {
 		//Debug.Log( "OnBar " + Just.ToString() );
 	}
 
-	void WillBlockRepeat()
-	{
-	}
-
-	void WillBlockChange()
-	{
-	}
-
 	void OnBlockRepeated()
 	{
 		++numRepeat;
@@ -383,6 +449,15 @@ public class Music : MonoBehaviour {
 		{
 			listener.OnBlockChanged();
 		}
+	}
+
+	//Will events (when isNowChanged)
+	void WillBlockRepeat()
+	{
+	}
+
+	void WillBlockChange()
+	{
 	}
 
 
