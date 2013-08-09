@@ -1,19 +1,14 @@
-//#define ADX
+#define ADX
 
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 
 /// <summary>
-/// 音楽の情報を取得出来ます。
-/// 音楽のキューをComponentに含んだオブジェクトにアタッチしてください。
-/// 生成時に再生開始し、その後音楽上のどのタイミングか、どのブロックにいるか、などが取得可能です。
-/// クオンタイズして再生、ブロックの設定、などが可能です。
+/// You can get musical information.
+/// Attach this as a component to GameObject include Music SoundCue.
 /// Known issues...
-/// 複数の曲の切り替えはまだちゃんとサポートしてません。
-/// 動作が重くなった時は拍が飛ぶ可能性があります。
-/// ブロックのループ時に毎回GetNumPlayedSamplesが1,2フレームほど失敗することがわかっています。
-/// IMusicListenerは必要に応じて拡張予定です。
+/// When using ADX2LE, when you use block loop, GetNumPlayedSamples will fail just after every loop.
 /// </summary>
 public class Music : MonoBehaviour {
 	
@@ -61,60 +56,64 @@ public class Music : MonoBehaviour {
 	/// Be suer to play only one Music Cue at once.
 	/// </summary>
 	private static Music Current;
-	private static List<IMusicListener> Listeners = new List<IMusicListener>();
-	public interface IMusicListener
-	{
-		void OnMusicStarted();
-		void OnBlockChanged();
-	}
+    private static List<Music> MusicList = new List<Music>();
 
 	//static properties
 	public static int mtBar { get { return Current.mtBar_; } }
 	public static int mtBeat { get { return Current.mtBeat_; } }
-	public static double mtUnit { get { return Current.MusicTimeUnit; } }
+    public static double mtUnit { get { return Current.MusicTimeUnit; } }
 	public static Timing Now { get { return Current.Now_; } }
 	public static Timing Just { get { return Current.Just_; } }
 	public static bool isJustChanged { get { return Current.isJustChanged_; } }
-	public static bool isNowChanged { get { return Current.isNowChanged_; } }
-	public static bool IsPlaying() { return Current.MusicSource.IsPlaying(); }
-	public static void Pause() { Current.MusicSource.Pause(); }
-	public static void Resume() { Current.MusicSource.Play(); }
-	public static void Stop() { Current.MusicSource.Stop(); }
-	/// <summary>
-	/// 一番近いJustから時間がどれだけ離れているかを符号付きで返す。
-	/// </summary>
-	public static double lag
-	{
-		get
-		{
-			if ( Current.isFormerHalf_ )
-				return Current.dtFromJust_;
-			else
-				return Current.dtFromJust_ - Current.MusicTimeUnit;
-		}
-	}
-	/// <summary>
-	/// 一番近いdmtUnitからどれだけラグがあるかを絶対値で返す。
-	/// </summary>
-	public static double lagAbs
-	{
-		get
-		{
-			if ( Current.isFormerHalf_ )
-				return Current.dtFromJust_;
-			else
-				return Current.MusicTimeUnit - Current.dtFromJust_;
-		}
-	}
-	/// <summary>
-	/// lagを-1～0～1の間で返す。
-	/// </summary>
-	public static double lagUnit { get { return lag / Current.MusicTimeUnit; } }
+    public static bool isNowChanged { get { return Current.isNowChanged_; } }
+	public static int numRepeat { get { return Current.numRepeat_; } }
+    /// <summary>
+    /// returns how long from nearest Just timing with sign.
+    /// </summary>
+    public static double lag
+    {
+        get
+        {
+            if( Current.isFormerHalf_ )
+                return Current.dtFromJust_;
+            else
+                return Current.dtFromJust_ - Current.MusicTimeUnit;
+        }
+    }
+    /// <summary>
+    /// returns how long from nearest Just timing absolutely.
+    /// </summary>
+    public static double lagAbs
+    {
+        get
+        {
+            if( Current.isFormerHalf_ )
+                return Current.dtFromJust_;
+            else
+                return Current.MusicTimeUnit - Current.dtFromJust_;
+        }
+    }
+    /// <summary>
+    /// returns normalized lag.
+    /// </summary>
+    public static double lagUnit { get { return lag / Current.MusicTimeUnit; } }
+    /// <summary>
+    /// returns time based in beat.
+    /// </summary>
+    public static double MusicalTime { get { return Now.totalUnit + lagUnit; } }
 
 	//static predicates
 	public static bool IsNowChangedWhen( System.Predicate<Timing> pred )
 	{
 		return Current.isNowChanged_ && pred( Current.Now_ );
+	}
+	public static bool IsNowChangedBar()
+	{
+		return Current.isNowChanged_ && Current.Now_.barUnit == 0;
+	}
+	public static bool IsNowChangedBeat()
+	{
+		return Current.isNowChanged_ && Current.Now_.unit == 0;
 	}
 	public static bool IsNowChangedAt( int bar, int beat = 0, int unit = 0 )
 	{
@@ -125,15 +124,28 @@ public class Music : MonoBehaviour {
 	{
 		return Current.isJustChanged_ && pred( Current.Just_ );
 	}
+	public static bool IsJustChangedBar()
+	{
+		return Current.isJustChanged_ && Current.Just_.barUnit == 0;
+	}
+	public static bool IsJustChangedBeat()
+	{
+		return Current.isJustChanged_ && Current.Just_.unit == 0;
+	}
 	public static bool IsJustChangedAt( int bar = 0, int beat = 0, int unit = 0 )
 	{
 		return Current.isJustChanged_ &&
                 Current.Just_.totalUnit == Current.mtBar_ * bar + Current.mtBeat_ * beat + unit;
 	}
 
-	//static funcs
-	public static void QuantizePlay( SoundCue source ) { Current.QuantizedCue.Add( source ); }
-	public static void AddListener( IMusicListener listener ) { Listeners.Add( listener ); }
+    //static functions
+    public static void Play( string MusicName ) { MusicList.Find( ( Music m ) => m.name == MusicName ).PlayStart(); }
+    public static bool IsPlaying() { return Current.MusicSource.IsPlaying(); }
+    public static void Pause() { Current.MusicSource.Pause(); }
+    public static void Resume() { Current.MusicSource.Play(); }
+    public static void Stop() { Current.MusicSource.Stop(); }
+    public static void QuantizePlay( SoundCue source ) { Current.QuantizedCue.Add( source ); }
+
 
 #if ADX
 
@@ -213,58 +225,48 @@ public class Music : MonoBehaviour {
 
 	//music editor params
 	/// <summary>
-	/// 一拍がMusicTime何個分に区切られているか。4or3だと思う。
+    /// how many MusicTime in a beat. maybe 4 or 3.
 	/// </summary>
 	public int mtBeat_ = 4;
 	/// <summary>
-	/// 一小節がMusicTime何個分か。
+    /// how many MusicTime in a bar.
 	/// </summary>
 	public int mtBar_ = 16;
 	/// <summary>
-	/// 通常の意味での音楽のテンポ。
-	/// 正確には、mtBeat分のMusicTimeがすぎるまでの時間が1分にいくつあるか。
+    /// Musical Tempo. how many beats in a minutes.
 	/// </summary>
 	public double Tempo_ = 128;
 
 	#region private params
 	//music current params
 	/// <summary>
-	/// 一番近いタイミングに合わせて切り替わる。
+    /// means nearest timing.
 	/// </summary>
 	Timing Now_;
 	/// <summary>
-	/// ジャストになってから切り替わる。
+    /// means last timing.
 	/// </summary>
 	Timing Just_;
 	/// <summary>
-	/// 今のフレームでTimingが変化したか
+    /// is Just changed in this frame or not.
 	/// </summary>
 	bool isJustChanged_;
-	/// <summary>
-	/// 今のフレームでisFormerHalfが変化したか
+    /// <summary>
+    /// is Now changed in this frame or not.
 	/// </summary>
 	bool isNowChanged_;
 	/// <summary>
-	/// 拍と拍の間の前半部分か（後半部分か）
+    /// is currently former half in a MusicalTime, or last half.
 	/// </summary>
 	bool isFormerHalf_;
 	/// <summary>
-	/// mtUnitで常に%する。最後に音楽上のタイミングが来てからの実時間。
+    /// delta time from JustChanged.
 	/// </summary>
 	double dtFromJust_;
 	/// <summary>
-	/// ADX上での現在再生中のブロック
+    /// how many times you repeat current music/block.
 	/// </summary>
-	int CurrentBlockIndex;
-	/// <summary>
-	/// ADX上での次に再生する予定のブロック
-	/// (ADX上で勝手に遷移する場合は取得できない)
-	/// </summary>
-	int NextBlockIndex;
-	/// <summary>
-	/// 現在のブロックをリピートした回数
-	/// </summary>
-	int numRepeat;
+	int numRepeat_;
 
 	SoundCue MusicSource;
 	List<SoundCue> QuantizedCue;
@@ -273,11 +275,17 @@ public class Music : MonoBehaviour {
 	CriAtomExAcb ACBData;
 	CriAtomEx.CueInfo CueInfo;
 	
+	int CurrentBlockIndex;
+	/// <summary>
+    /// you can't catch NextBlockIndex if ADX automatically change next block.
+	/// </summary>
+    int NextBlockIndex;
+    int OldBlockIndex;
 	public List<BlockInfo> BlockInfos;
-	int NumBlockBar { get { return BlockInfos[CurrentBlockIndex].NumBar; } }
-	long SamplesInBlock { get { return BlockInfos[CurrentBlockIndex].NumBar * SamplesPerBar; } }
+	int NumBlockBar;
+    long SamplesInBlock { get { return NumBlockBar * SamplesPerBar; } }
 #else
-	readonly int NumBlockBar = 0;
+    readonly int NumBlockBar = 0;
 #endif
 
 	//readonly params
@@ -288,16 +296,18 @@ public class Music : MonoBehaviour {
 
 	//others
 	/// <summary>
-	/// Nowの直前の状態
+	/// Cache of Now and Just a frame ago.
 	/// </summary>
-	Timing Old, OldJust;
-	int OldBlockIndex;
+	Timing OldNow, OldJust;
+    long OldNumSamples;
+
 	#endregion
 
 	#region Unity Interfaces
 	void Awake()
 	{
 		Current = this;
+        MusicList.Add( this );
 #if ADX
 		MusicSource = new SoundCue( GetComponent<CriAtomSource>() );
 		ACBData = CriAtom.GetAcb( MusicSource.source.cueSheet );
@@ -313,49 +323,79 @@ public class Music : MonoBehaviour {
 
 		MusicTimeUnit = (double)SamplesPerUnit / (double)SamplingRate;
 
-		Now_ = new Timing( 0, 0, -1 );
-		Just_ = new Timing( Now_ );
-		Old = new Timing( Now_ );
-		OldJust = new Timing( Just_ );
+        Initialize();
 	}
+
+    void Initialize()
+    {
+        Now_ = new Timing( 0, 0, -1 );
+        Just_ = new Timing( Now_ );
+        OldNow = new Timing( Now_ );
+        OldJust = new Timing( Just_ );
+        dtFromJust_ = 0;
+        isFormerHalf_ = true;
+        OldNumSamples = 0;
+        numRepeat_ = 0;
+#if ADX
+        CurrentBlockIndex = 0;
+        OldBlockIndex = 0;
+        NextBlockIndex = 0;
+#endif
+    }
 
 	// Use this for initialization
 	void Start()
 	{
-		WillBlockChange();
+	}
+
+    public void PlayStart()
+    {
+		if ( Current != null && IsPlaying() )
+		{
+			Stop();
+		}
+
+        Current = this;
+        Initialize();
+
+        WillBlockChange();
 #if ADX
 		playback = MusicSource.source.Play();
 #else
-		MusicSource.Play();
+        MusicSource.Play();
 #endif
-		foreach ( IMusicListener listener in Listeners )
-		{
-			listener.OnMusicStarted();
-		}
-		OnBlockChanged();
-	}
+        OnBlockChanged();
+
+		NumBlockBar = BlockInfos[playback.GetCurrentBlockIndex()].NumBar;
+    }
 	
 	// Update is called once per frame
 	void Update () {
-		long numSamples;
+        long numSamples;
+        isNowChanged_ = false;
+        isJustChanged_ = false;
 #if ADX
-		CurrentBlockIndex = playback.GetCurrentBlockIndex();
+        if( playback.GetStatus() != CriAtomExPlayback.Status.Playing ) return;
 		int tempOut;
 		if ( !playback.GetNumPlayedSamples( out numSamples, out tempOut ) )
 		{
 			numSamples = -1;
 		}
 #else
-		numSamples = MusicSource.source.timeSamples;
+        if( !MusicSource.IsPlaying() ) return;
+        numSamples = MusicSource.source.timeSamples;
 #endif
 		if( numSamples >= 0 )
 		{
-			Just_.bar = (int)( numSamples / SamplesPerBar );
+			UpdateNumBlockBar( numSamples );
+
+            Just_.bar = (int)(numSamples / SamplesPerBar);
 			if ( NumBlockBar != 0 ) Just_.bar %= NumBlockBar;
 			Just_.beat = (int)( ( numSamples % SamplesPerBar ) / SamplesPerBeat );
-			Just_.unit = (int)( ( numSamples % SamplesPerBeat ) / SamplesPerUnit );
-			isFormerHalf_ = ( numSamples % SamplesPerUnit ) < SamplesPerUnit / 2;
+            Just_.unit = (int)((numSamples % SamplesPerBeat) / SamplesPerUnit);
+            isFormerHalf_ = ( numSamples % SamplesPerUnit ) < SamplesPerUnit / 2;
 			dtFromJust_ = (double)( numSamples % SamplesPerUnit ) / (double)SamplingRate;
+            //Debug.Log( "NumBlockBar:" + NumBlockBar + " Just_:" + Just_.ToString() + " OldJust:" + OldJust.ToString() );
 
 			Now_.Copy( Just_ );
 			if ( !isFormerHalf_ ) Now_.Increment();
@@ -366,49 +406,75 @@ public class Music : MonoBehaviour {
 			}
 #endif
 
-			isNowChanged_ = Now_.totalUnit != Old.totalUnit;
+			isNowChanged_ = Now_.totalUnit != OldNow.totalUnit;
 			isJustChanged_ = Just_.totalUnit != OldJust.totalUnit;
 
 			CallEvents();
 
-			Old.Copy( Now_ );
+			OldNow.Copy( Now_ );
 			OldJust.Copy( Just_ );
+
+            OldNumSamples = numSamples;
 		}
 		else
 		{
-			Debug.LogWarning( "Warning!! Failed to GetNumPlayedSamples" );
+			//Debug.LogWarning( "Warning!! Failed to GetNumPlayedSamples" );
+		}
+	}
+
+	void UpdateNumBlockBar( long numSamples )
+	{
+		//BlockChanged
+		if ( OldNumSamples > numSamples )
+		{
+			NumBlockBar = BlockInfos[playback.GetCurrentBlockIndex()].NumBar;
+		}
+		//BlockChanged during this block
+		else if ( playback.GetCurrentBlockIndex() != CurrentBlockIndex && Just_.bar != BlockInfos[CurrentBlockIndex].NumBar - 1 )
+		{
+			NumBlockBar = Just_.bar + 1;
 		}
 	}
 
 	void CallEvents()
 	{
 		if ( isNowChanged_ ) OnNowChanged();
-		if ( isNowChanged_ && Old > Now_ )
+		if ( isNowChanged_ && OldNow > Now_ )
 		{
+#if ADX
 			if ( NextBlockIndex == CurrentBlockIndex )
 			{
+#endif
 				WillBlockRepeat();
+#if ADX
 			}
 			else
 			{
 				WillBlockChange();
 			}
-		}
+#endif
+        }
 		if ( isJustChanged_ ) OnJustChanged();
 		if ( isJustChanged_ && Just_.unit == 0 ) OnBeat();
 		if ( isJustChanged_ && Just_.barUnit == 0 ) OnBar();
 		if ( isJustChanged_ && OldJust > Just_ )
 		{
+#if ADX
+			CurrentBlockIndex = playback.GetCurrentBlockIndex();
+			Debug.Log( "CurrentBlockIndex is " + CurrentBlockIndex );
 			if ( OldBlockIndex == CurrentBlockIndex )
 			{
+#endif
 				OnBlockRepeated();
+#if ADX
 			}
 			else
 			{
 				OnBlockChanged();
-			}
+            }
 			OldBlockIndex = CurrentBlockIndex;
-		}
+#endif
+        }
 
 		if ( isJustChanged_ && Just_.totalUnit > 0 )
 		{
@@ -425,12 +491,6 @@ public class Music : MonoBehaviour {
 	//On events (when isJustChanged)
 	void OnNowChanged()
 	{
-		//foreach ( CriAtomSource cue in QuantizedCue )
-		//{
-		//    cue.SetAisac( 2, (float)(MusicTimeUnit - dtFromJust_) );
-		//    cue.Play();
-		//}
-		//QuantizedCue.Clear();
 	}
 
 	void OnJustChanged()
@@ -455,17 +515,13 @@ public class Music : MonoBehaviour {
 
 	void OnBlockRepeated()
 	{
-		++numRepeat;
+		++numRepeat_;
 		//Debug.Log( "NumRepeat = " + numRepeat );
 	}
 
 	void OnBlockChanged()
 	{
-		numRepeat = 0;
-		foreach ( IMusicListener listener in Listeners )
-		{
-			listener.OnBlockChanged();
-		}
+		numRepeat_ = 0;
 	}
 
 	//Will events (when isNowChanged)
