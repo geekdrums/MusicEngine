@@ -46,7 +46,6 @@
   <ItemGroup>
      <Compile Include="Assets\Music.cs" />
      <Compile Include="Assets\SampleCode.cs" />
-     <Compile Include="Assets\Timing.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
