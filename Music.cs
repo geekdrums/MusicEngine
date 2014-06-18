@@ -569,8 +569,8 @@ public class Music : MonoBehaviour
 		if ( numSamples >= 0 )
         {
 			Just_.bar = (int)( numSamples / SamplesPerBar ) + CurrentSection_.StartTiming_.bar;
-            Just_.beat = (int)((numSamples % SamplesPerBar) / SamplesPerBeat);// +CurrentSection_.StartTiming_.beat;
-            Just_.unit = (int)(((numSamples % SamplesPerBar) % SamplesPerBeat) / SamplesPerUnit);// +CurrentSection_.StartTiming_.unit;
+            Just_.beat = (int)((numSamples % SamplesPerBar) / SamplesPerBeat) +CurrentSection_.StartTiming_.beat;
+            Just_.unit = (int)(((numSamples % SamplesPerBar) % SamplesPerBeat) / SamplesPerUnit) +CurrentSection_.StartTiming_.unit;
 			if( Just_.unit >= CurrentSection_.mtBeat_ )
 			{
 				Just_.beat += (int)(Just_.unit / CurrentSection_.mtBeat_);
