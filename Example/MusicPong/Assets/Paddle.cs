@@ -6,8 +6,6 @@ public class Paddle : MonoBehaviour {
     public float curve;
     public float damageScale;
 
-    public float BarRadius { get { return transform.localScale.x * 10.0f / 2.0f; } }
-    public float BallRadius { get { return Field.instance.ball.transform.localScale.x * 10.0f; } }
     public int totalDamage { get; private set; }
 
     Camera MainCamera;
@@ -16,14 +14,6 @@ public class Paddle : MonoBehaviour {
 
     int damageMusicalTime;
 
-
-    public void Initialize()
-    {
-        transform.position = initialPosition;
-        totalDamage = 0;
-        damageMusicalTime = 0;
-        redBar.transform.localScale = Vector3.one;
-    }
 
 	// Use this for initialization
 	void Start () {
@@ -36,28 +26,27 @@ public class Paddle : MonoBehaviour {
 	// Update is called once per frame
     void Update()
     {
-        switch( Music.CurrentSection.name )
+        if( Music.CurrentSection.name == "Start" )
         {
-        case "Start":
             transform.localScale = new Vector3( initialScale.x * Mathf.Clamp01( (float)Music.MusicalTime / 16.0f ), initialScale.y, initialScale.z );
-            break;
-        case "Play":
-        case "Play2":
+        }
+        else if( Music.CurrentSection.name.StartsWith( "Play" ) )
+        {
             //input
             Ray ray = MainCamera.ScreenPointToRay( Input.mousePosition );
             RaycastHit hit;
             Physics.Raycast( ray.origin, ray.direction, out hit, Mathf.Infinity );
             if( hit.collider != null )
             {
-                transform.position = new Vector3( Mathf.Clamp( hit.point.x, -Field.instance.fieldLength + BarRadius, Field.instance.fieldLength - BarRadius ), transform.position.y, 0 );
+                transform.position = new Vector3( Mathf.Clamp( hit.point.x, -Field.FieldLength + Field.BarRadius, Field.FieldLength - Field.BarRadius ), transform.position.y, 0 );
             }
 
             //reflect
             Ball ball = Field.instance.ball;
             Vector3 d = ball.transform.position - transform.position;
-            if( ball.velocity.y < 0 && Mathf.Abs( d.y ) < BallRadius && Mathf.Abs( d.x ) < BarRadius )
+            if( ball.velocity.y < 0 && Mathf.Abs( d.y ) < Field.BallRadius && Mathf.Abs( d.x ) < Field.BarRadius )
             {
-                ball.velocity = Vector3.Reflect( ball.velocity, Quaternion.AngleAxis( -curve * d.x / BarRadius, Vector3.forward ) * Vector3.up );
+                ball.velocity = Vector3.Reflect( ball.velocity, Quaternion.AngleAxis( -curve * d.x / Field.BarRadius, Vector3.forward ) * Vector3.up );
                 ball.velocity.y = Mathf.Max( ball.velocity.y, 2.5f );
                 Music.QuantizePlay( audio, -3 );
             }
@@ -75,16 +64,28 @@ public class Paddle : MonoBehaviour {
                     }
                 }
             }
-            break;
         }
 	}
 
-    public void Damage()
+    public bool OnShot( float x )
     {
-        transform.localScale = new Vector3( transform.localScale.x * damageScale, transform.localScale.y, transform.localScale.z );
-        redBar.transform.localScale = new Vector3( 1.0f / damageScale, 1.0f, 1.0f );
-        damageMusicalTime = 8;
-        ++totalDamage;
+        if( Mathf.Abs( x - transform.position.x ) < Field.BarRadius )
+        {
+            transform.localScale = new Vector3( transform.localScale.x * damageScale, transform.localScale.y, transform.localScale.z );
+            redBar.transform.localScale = new Vector3( 1.0f / damageScale, 1.0f, 1.0f );
+            damageMusicalTime = 8;
+            ++totalDamage;
+            return true;
+        }
+        else return false;
+    }
+
+    public void OnRestart()
+    {
+        transform.position = initialPosition;
+        totalDamage = 0;
+        damageMusicalTime = 0;
+        redBar.transform.localScale = Vector3.one;
     }
 
     public void OnSeektoPlay()

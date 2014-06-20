@@ -12,14 +12,6 @@ public class Ball : MonoBehaviour {
     int shotMusicalTime;
     int beamIndex;
 
-    public void Initialize()
-    {
-        shotMusicalTime = 0;
-        beamIndex = 0;
-        transform.position = initialPosition;
-        velocity = initialVelocity;
-    }
-
 	// Use this for initialization
 	void Start () {
         initialPosition = transform.position;
@@ -30,7 +22,7 @@ public class Ball : MonoBehaviour {
 	void Update () {
         if( Music.CurrentSection.name.StartsWith( "Play" ) )
         {
-            UpdateShot();
+            CheckShot();
 
             if( shotMusicalTime > 0 )
             {
@@ -46,7 +38,7 @@ public class Ball : MonoBehaviour {
         }
 	}
 
-    void UpdateShot()
+    void CheckShot()
     {
         if( beamIndex < beamTimings.Length && Music.isNowChanged
             && ( beamTimings[beamIndex].totalUnit - 4 == Music.Now.totalUnit ) )
@@ -62,25 +54,28 @@ public class Ball : MonoBehaviour {
     void UpdatePosition()
     {
         transform.position += velocity * Time.deltaTime;
-        if( transform.position.x <= -Field.instance.fieldLength || Field.instance.fieldLength <= transform.position.x )
+        if( transform.position.x <= -Field.FieldLength || Field.FieldLength <= transform.position.x )
         {
+            //side wall
             velocity.x = Mathf.Abs( velocity.x ) * -Mathf.Sign( transform.position.x );
             Music.QuantizePlay( audio );
         }
-        if( Field.instance.fieldLength <= transform.position.y )
+        if( Field.FieldLength <= transform.position.y )
         {
+            //roof
             velocity.y = Mathf.Abs( velocity.y ) * -Mathf.Sign( transform.position.y );
             Music.QuantizePlay( audio, 7 );
         }
-        else if( transform.position.y <= -Field.instance.fieldLength )
+        else if( transform.position.y <= -Field.FieldLength )
         {
+            //floor
             Music.SeekToSection( "GameOver" );
         }
     }
 
     public void OnShot()
     {
-        if( Music.CurrentSection.name == "Play2" )
+        if( Music.CurrentSection.name == "Play3" )
         {
             shotMusicalTime = 2;
         }
@@ -88,5 +83,13 @@ public class Ball : MonoBehaviour {
         {
             shotMusicalTime = 3;
         }
+    }
+
+    public void OnRestart()
+    {
+        shotMusicalTime = 0;
+        beamIndex = 0;
+        transform.position = initialPosition;
+        velocity = initialVelocity;
     }
 }

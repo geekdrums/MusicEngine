@@ -4,6 +4,9 @@ using System.Collections;
 public class Field : MonoBehaviour {
 
     public static Field instance;
+    public static float FieldLength { get { return instance.fieldLength; } }
+    public static float BarRadius { get { return instance.paddle.transform.localScale.x * 10.0f / 2.0f; } }
+    public static float BallRadius { get { return instance.ball.transform.localScale.x * 10.0f; } }
 
     public Ball ball;
     public Paddle paddle;
@@ -13,35 +16,34 @@ public class Field : MonoBehaviour {
     public float fieldLength;
     public float lerpMusicalTime;
     public float accelerate;
-
+    public Color EndBarColor, EndBarLerpColor;
     public Material fieldMaterial;
 
-    public Color LerpColor1, LerpColor2;
-    public Color ClearColor;
-    public Color Lv1Color, Lv1BGColor;
-    public Color Lv2Color, Lv2BGColor;
-    public Color Lv3Color, Lv3BGColor;
-    public Color Lv4Color, Lv4BGColor;
-    public Color Lv5Color, Lv5LerpColor, Lv5BGColor;
-    public Color Lv6Color, Lv6LerpColor, Lv6BGColor;
-    public Color Lv7Color, Lv7LerpColor, Lv7BGColor, Lv7BGChangeColor;
-    public Color Lv8Color, Lv8LerpColor, Lv8BGColor, Lv8BGChangeColor;
+    [System.Serializable]
+    public class Level
+    {
+        public Color materialColor, lerpMaterialColor;
+        public Color BGColor, BGChangeColor;
+    }
+
+    public Level[] levels;
 
     Vector3 endbarInitialScale, endbarGameOverScale;
     Camera MainCamera;
-    int level;
+    int currentLevel;
 
 	// Use this for initialization
 	void Start () {
         instance = this;
+
         endbarInitialScale = EndBar.transform.localScale;
         endbarGameOverScale = endbarInitialScale;
         endbarGameOverScale.z = 3.0f;
         retryText.enabled = false;
         clearText.enabled = false;
         MainCamera = GameObject.Find( "Main Camera" ).GetComponent<Camera>();
-        MainCamera.backgroundColor = Lv1BGColor;
-        fieldMaterial.color = Lv1Color;
+        MainCamera.backgroundColor = levels[0].BGColor;
+        fieldMaterial.color = levels[0].materialColor;
 	}
 	
 	// Update is called once per frame
@@ -60,7 +62,7 @@ public class Field : MonoBehaviour {
         default://Play
             UpdateColor();
 
-            if( Music.IsJustChangedAt( 18 ) )//level4
+            if( Music.IsJustChangedSection( "Play2" ) )
             {
                 ball.velocity *= accelerate;
             }
@@ -93,7 +95,7 @@ public class Field : MonoBehaviour {
     {
         if( Music.IsJustChangedSection() )
         {
-            EndBar.renderer.material.color = ClearColor;
+            EndBar.renderer.material.color = Color.white;
             clearText.enabled = true;
             if( paddle.totalDamage == 0 )
             {
@@ -108,6 +110,7 @@ public class Field : MonoBehaviour {
                 fieldMaterial.color = Color.black;
             }
         }
+
         EndBar.transform.localScale = Vector3.Lerp( EndBar.transform.localScale, endbarGameOverScale, 0.2f );
 
         if( Music.IsJustChangedAt( Music.CurrentSection.StartTiming_.bar + 3 ) )
@@ -125,12 +128,13 @@ public class Field : MonoBehaviour {
         if( Music.IsJustChangedSection() )
         {
             retryText.enabled = true;
-            retryText.text = "Survived level: " + (level - 1).ToString() + "/8\nClick to restart.";
-            EndBar.renderer.material.color = LerpColor2;
+            retryText.text = "Survived level: " + currentLevel + "/8\nClick to restart.";
+            EndBar.renderer.material.color = EndBarLerpColor;
         }
+
         EndBar.transform.localScale = Vector3.Lerp( EndBar.transform.localScale, endbarGameOverScale, 0.2f );
 
-        if( Music.IsJustChangedAt( Music.CurrentSection.StartTiming_.bar + 2 ) )
+        if( Music.IsJustChangedAt( Music.CurrentSection.StartTiming_.bar + 3 ) )
         {
             Music.Stop();
         }
@@ -144,78 +148,26 @@ public class Field : MonoBehaviour {
     {
         Music.SeekToSection( "Start" );
         Music.Play( "Music" );
-        ball.Initialize();
-        paddle.Initialize();
+        ball.OnRestart();
+        paddle.OnRestart();
         retryText.enabled = false;
         clearText.enabled = false;
-        MainCamera.backgroundColor = Lv1BGColor;
-        fieldMaterial.color = Lv1Color;
-        level = 0;
+        MainCamera.backgroundColor = levels[0].BGColor;
+        fieldMaterial.color = levels[0].materialColor;
+        currentLevel = 0;
     }
 
     void UpdateColor()
     {
-        EndBar.renderer.material.color = Color.Lerp( LerpColor1, LerpColor2, (Mathf.Cos( Mathf.PI * (float)Music.MusicalTime / lerpMusicalTime ) + 1.0f) / 2.0f );
+        currentLevel = (Music.Just.bar - 2) / 4;
 
-        level = 1 + (Music.Just.bar - 2) / 4;
-        switch( level )
+        EndBar.renderer.material.color = Color.Lerp( EndBarColor, EndBarLerpColor, (Mathf.Cos( Mathf.PI * (float)Music.MusicalTime / lerpMusicalTime ) + 1.0f) / 2.0f );
+        fieldMaterial.color = Color.Lerp( levels[currentLevel].materialColor, levels[currentLevel].lerpMaterialColor, (Mathf.Cos( Mathf.PI * (float)Music.MusicalTime / lerpMusicalTime ) + 1.0f) / 2.0f );
+
+        if( Music.IsJustChangedBar() )
         {
-        case 1:
-            if( Music.IsJustChangedBar() )
-            {
-                MainCamera.backgroundColor = Lv1BGColor;
-                fieldMaterial.color = Lv1Color;
-            }
-            break;
-        case 2:
-            if( Music.IsJustChangedBar() )
-            {
-                MainCamera.backgroundColor = Lv2BGColor;
-                fieldMaterial.color = Lv2Color;
-            }
-            break;
-        case 3:
-            if( Music.IsJustChangedBar() )
-            {
-                MainCamera.backgroundColor = Lv3BGColor;
-                fieldMaterial.color = Lv3Color;
-            }
-            break;
-        case 4:
-            if( Music.IsJustChangedBar() )
-            {
-                MainCamera.backgroundColor = Lv4BGColor;
-                fieldMaterial.color = Lv4Color;
-            }
-            break;
-        case 5:
-            if( Music.IsJustChangedBar() )
-            {
-                MainCamera.backgroundColor = Lv5BGColor;
-            }
-            fieldMaterial.color = Color.Lerp( Lv5Color, Lv5LerpColor, (Mathf.Cos( Mathf.PI * (float)Music.MusicalTime / lerpMusicalTime ) + 1.0f) / 2.0f );
-            break;
-        case 6:
-            if( Music.IsJustChangedBar() )
-            {
-                MainCamera.backgroundColor = Lv6BGColor;
-            }
-            fieldMaterial.color = Color.Lerp( Lv6Color, Lv6LerpColor, (Mathf.Cos( Mathf.PI * (float)Music.MusicalTime / lerpMusicalTime ) + 1.0f) / 2.0f );
-            break;
-        case 7:
-            if( Music.IsJustChangedBar() )
-            {
-                MainCamera.backgroundColor = Music.Just.bar % 2 == 0 ? Lv7BGColor : Lv7BGChangeColor;
-            }
-            fieldMaterial.color = Color.Lerp( Lv7Color, Lv7LerpColor, (Mathf.Cos( Mathf.PI * (float)Music.MusicalTime / lerpMusicalTime ) + 1.0f) / 2.0f );
-            break;
-        case 8:
-            if( Music.IsJustChangedBar() )
-            {
-                MainCamera.backgroundColor = Music.Just.bar % 2 == 0 ? Lv8BGColor : Lv8BGChangeColor;
-            }
-            fieldMaterial.color = Color.Lerp( Lv8Color, Lv8LerpColor, (Mathf.Cos( Mathf.PI * (float)Music.MusicalTime / lerpMusicalTime ) + 1.0f) / 2.0f );
-            break;
+            MainCamera.backgroundColor = Music.Just.bar % 2 == 0 ?
+                levels[currentLevel].BGColor : levels[currentLevel].BGChangeColor;
         }
     }
 }

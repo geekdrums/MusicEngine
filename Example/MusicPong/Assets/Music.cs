@@ -1,4 +1,6 @@
 //Copyright (c) 2014 geekdrums
+//Released under the MIT license
+//http://opensource.org/licenses/mit-license.php
 //Feel free to use this for your lovely musical games :)
 
 using UnityEngine;
@@ -32,7 +34,7 @@ public class Music : MonoBehaviour
     /// Just for music that doesn't start with the first timesample.
     /// if so, specify time samples before music goes into first timing = (0,0,0).
     /// </summary>
-    public int startTimeSamples = 0;
+    public int delayTimeSamples = 0;
     /// <summary>
     /// put your debug GUIText to see current musical time & section info.
     /// </summary>
@@ -117,8 +119,6 @@ public class Music : MonoBehaviour
         }
     }
 
-	static readonly int SamplingRate = 44100;
-    static readonly float pitchUnit = Mathf.Pow( 2.0f, 1.0f / 12.0f );
     static Music Current;
 	static List<Music> MusicList = new List<Music>();
 	
@@ -276,7 +276,7 @@ public class Music : MonoBehaviour
     public static void Stop() { Current.MusicSource.Stop(); }
     public static void Seek( Timing timing )
     {
-        Current.MusicSource.source.timeSamples = (int)(timing.totalUnit * MusicTimeUnit * SamplingRate);
+        Current.MusicSource.source.timeSamples = (int)(timing.totalUnit * MusicTimeUnit * Current.SamplingRate);
     }
     public static void SeekToSection( string sectionName )
     {
@@ -382,11 +382,13 @@ public class Music : MonoBehaviour
     Section CurrentSection_ { get { return sections[SectionIndex]; } }
     List<AudioSource> QuantizedCue = new List<AudioSource>();
 
-	//readonly params
+    //readonly params
+    static readonly float pitchUnit = Mathf.Pow( 2.0f, 1.0f / 12.0f );
+    int SamplingRate;// = 44100;
 	long SamplesPerUnit;
 	long SamplesPerBeat;
 	long SamplesPerBar;
-	long SamplesInLoop;
+    long SamplesInLoop;
 
 	//others
 	Timing OldNow, OldJust;
@@ -409,6 +411,7 @@ public class Music : MonoBehaviour
             Current = this;
         }
         MusicSource = new SoundCue( audio );
+        SamplingRate = audio.clip.frequency;
         if( audio.loop )
         {
             SamplesInLoop = audio.clip.samples;
@@ -440,16 +443,21 @@ public class Music : MonoBehaviour
 
     void OnValidate()
     {
+        if( SamplingRate == 0 )
+        {
+            SamplingRate = (audio != null ? audio.clip.frequency : 44100);
+        }
+
         if( sections == null || sections.Count == 0 )
         {
             sections = new List<Section>();
             sections.Add( new Section( new Timing( 0 ), 4, 16, 120 ) );
-            sections[0].OnValidate( startTimeSamples, 0 );
+            sections[0].OnValidate( delayTimeSamples, 0 );
         }
         else
         {
             bool isValidated = true;
-            int timeSamples = startTimeSamples;
+            int timeSamples = delayTimeSamples;
             int totalUnit = 0;
             for( int i = 0; i < sections.Count; i++ )
             {
@@ -541,7 +549,7 @@ public class Music : MonoBehaviour
         }
         if( NewIndex < 0 )
         {
-            if( 0 <= numSamples && numSamples < startTimeSamples )
+            if( 0 <= numSamples && numSamples < delayTimeSamples )
             {
                 NewIndex = 0;
                 Initialize();
@@ -569,8 +577,8 @@ public class Music : MonoBehaviour
 		if ( numSamples >= 0 )
         {
 			Just_.bar = (int)( numSamples / SamplesPerBar ) + CurrentSection_.StartTiming_.bar;
-            Just_.beat = (int)((numSamples % SamplesPerBar) / SamplesPerBeat);// +CurrentSection_.StartTiming_.beat;
-            Just_.unit = (int)(((numSamples % SamplesPerBar) % SamplesPerBeat) / SamplesPerUnit);// +CurrentSection_.StartTiming_.unit;
+            Just_.beat = (int)((numSamples % SamplesPerBar) / SamplesPerBeat) +CurrentSection_.StartTiming_.beat;
+            Just_.unit = (int)(((numSamples % SamplesPerBar) % SamplesPerBeat) / SamplesPerUnit) +CurrentSection_.StartTiming_.unit;
 			if( Just_.unit >= CurrentSection_.mtBeat_ )
 			{
 				Just_.beat += (int)(Just_.unit / CurrentSection_.mtBeat_);
@@ -620,7 +628,7 @@ public class Music : MonoBehaviour
 	{
 		if( debugText != null )
 		{
-			debugText.text = "Just = " + Just_.ToString() + ", totalUnit:" + Just_.totalUnit;
+			debugText.text = "Just = " + Just_.ToString() + ", MusicalTime = " + MusicalTime_;
 			if( sections.Count > 0 )
 			{
 				debugText.text += System.Environment.NewLine + "section[" + SectionIndex + "] = " + CurrentSection_.ToString();

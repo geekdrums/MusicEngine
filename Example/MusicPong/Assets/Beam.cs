@@ -29,10 +29,13 @@ public class Beam : MonoBehaviour {
         }
         else
         {
-            transform.localScale = Vector3.one;
-            renderer.material.color = Color.white;
-
-            if( Music.Just > shotTiming )
+            //hide or destroy
+            if( Music.Just < shotTiming )
+            {
+                transform.localScale = Vector3.one;
+                renderer.material.color = Color.white;
+            }
+            else
             {
                 Destroy( gameObject );
             }
@@ -42,9 +45,8 @@ public class Beam : MonoBehaviour {
         {
             //shot
             Field.instance.ball.OnShot();
-            if( Mathf.Abs( this.transform.position.x - Field.instance.paddle.transform.position.x ) < Field.instance.paddle.BarRadius )
+            if( Field.instance.paddle.OnShot( this.transform.position.x ) )
             {
-                Field.instance.paddle.Damage();
                 audio.Play();
             }
         }
