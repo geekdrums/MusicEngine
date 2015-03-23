@@ -17,16 +17,16 @@ public class Ball : MonoBehaviour {
         initialPosition = transform.position;
         initialVelocity = velocity;
 	}
-	
+
 	// Update is called once per frame
 	void Update () {
-        if( Music.CurrentSection.name.StartsWith( "Play" ) )
+        if( Music.CurrentSection.Name.StartsWith( "Play" ) )
         {
             CheckShot();
 
             if( shotMusicalTime > 0 )
             {
-                if( Music.isJustChanged )
+                if( Music.IsJustChanged )
                 {
                     --shotMusicalTime;
                 }
@@ -40,8 +40,8 @@ public class Ball : MonoBehaviour {
 
     void CheckShot()
     {
-        if( beamIndex < beamTimings.Length && Music.isNowChanged
-            && ( beamTimings[beamIndex].totalUnit - 4 == Music.Now.totalUnit ) )
+        if( beamIndex < beamTimings.Length && Music.IsNearChanged
+            && ( beamTimings[beamIndex].CurrentMusicalTime - 4 == Music.Near.CurrentMusicalTime ) )
         {
             Beam beam = (Instantiate( beamPrefab ) as GameObject).GetComponent<Beam>();
             beam.transform.parent = transform;
@@ -58,13 +58,13 @@ public class Ball : MonoBehaviour {
         {
             //side wall
             velocity.x = Mathf.Abs( velocity.x ) * -Mathf.Sign( transform.position.x );
-            Music.QuantizePlay( audio );
+            Music.QuantizePlay( GetComponent<AudioSource>() );
         }
         if( Field.FieldLength <= transform.position.y )
         {
             //roof
             velocity.y = Mathf.Abs( velocity.y ) * -Mathf.Sign( transform.position.y );
-            Music.QuantizePlay( audio, 7 );
+            Music.QuantizePlay( GetComponent<AudioSource>(), 7 );
         }
         else if( transform.position.y <= -Field.FieldLength )
         {
@@ -75,7 +75,7 @@ public class Ball : MonoBehaviour {
 
     public void OnShot()
     {
-        if( Music.CurrentSection.name == "Play3" )
+        if( Music.CurrentSection.Name == "Play3" )
         {
             shotMusicalTime = 2;
         }

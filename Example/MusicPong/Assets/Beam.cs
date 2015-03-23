@@ -25,7 +25,7 @@ public class Beam : MonoBehaviour {
             //effect
             float x = Mathf.Pow( beamPow, (-d - 0.5f) * beamScale );
             transform.localScale = new Vector3( 1.0f + x, 1.0f, 0.03f + 1.0f / x );
-            renderer.material.color = ( d > 0 ? Color.Lerp( Color.red, Color.clear, (d - 1) / 2.0f ) : Color.white );
+            GetComponent<Renderer>().material.color = ( d > 0 ? Color.Lerp( Color.red, Color.clear, (d - 1) / 2.0f ) : Color.white );
         }
         else
         {
@@ -33,7 +33,7 @@ public class Beam : MonoBehaviour {
             if( Music.Just < shotTiming )
             {
                 transform.localScale = Vector3.one;
-                renderer.material.color = Color.white;
+                GetComponent<Renderer>().material.color = Color.white;
             }
             else
             {
@@ -47,7 +47,7 @@ public class Beam : MonoBehaviour {
             Field.instance.ball.OnShot();
             if( Field.instance.paddle.OnShot( this.transform.position.x ) )
             {
-                audio.Play();
+                GetComponent<AudioSource>().Play();
             }
         }
 	}

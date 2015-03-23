@@ -48,7 +48,7 @@ public class Field : MonoBehaviour {
 	
 	// Update is called once per frame
 	void Update () {
-        switch( Music.CurrentSection.name )
+        switch( Music.CurrentSection.Name )
         {
         case "Start":
             UpdateStart();
@@ -76,7 +76,7 @@ public class Field : MonoBehaviour {
         if( titleText.enabled )
         {
             titleText.color = Color.Lerp( Color.white, Color.clear, (float)Music.MusicalTime / 16.0f - 1.0f );
-            if( Music.IsNowChangedAt( 2 ) )
+            if( Music.IsNearChangedAt( 2 ) )
             {
                 titleText.enabled = false;
             }
@@ -95,7 +95,7 @@ public class Field : MonoBehaviour {
     {
         if( Music.IsJustChangedSection() )
         {
-            EndBar.renderer.material.color = Color.white;
+            EndBar.GetComponent<Renderer>().material.color = Color.white;
             clearText.enabled = true;
             if( paddle.totalDamage == 0 )
             {
@@ -113,7 +113,7 @@ public class Field : MonoBehaviour {
 
         EndBar.transform.localScale = Vector3.Lerp( EndBar.transform.localScale, endbarGameOverScale, 0.2f );
 
-        if( Music.IsJustChangedAt( Music.CurrentSection.StartTiming_.bar + 3 ) )
+        if( Music.IsJustChangedAt( Music.CurrentSection.StartTiming.Bar + 3 ) )
         {
             Music.Stop();
         }
@@ -129,12 +129,12 @@ public class Field : MonoBehaviour {
         {
             retryText.enabled = true;
             retryText.text = "Survived level: " + currentLevel + "/8\nClick to restart.";
-            EndBar.renderer.material.color = EndBarLerpColor;
+            EndBar.GetComponent<Renderer>().material.color = EndBarLerpColor;
         }
 
         EndBar.transform.localScale = Vector3.Lerp( EndBar.transform.localScale, endbarGameOverScale, 0.2f );
 
-        if( Music.IsJustChangedAt( Music.CurrentSection.StartTiming_.bar + 3 ) )
+        if( Music.IsJustChangedAt( Music.CurrentSection.StartTiming.Bar + 3 ) )
         {
             Music.Stop();
         }
@@ -159,14 +159,14 @@ public class Field : MonoBehaviour {
 
     void UpdateColor()
     {
-        currentLevel = (Music.Just.bar - 2) / 4;
+        currentLevel = (Music.Just.Bar - 2) / 4;
 
-        EndBar.renderer.material.color = Color.Lerp( EndBarColor, EndBarLerpColor, (Mathf.Cos( Mathf.PI * (float)Music.MusicalTime / lerpMusicalTime ) + 1.0f) / 2.0f );
-        fieldMaterial.color = Color.Lerp( levels[currentLevel].materialColor, levels[currentLevel].lerpMaterialColor, (Mathf.Cos( Mathf.PI * (float)Music.MusicalTime / lerpMusicalTime ) + 1.0f) / 2.0f );
+		EndBar.GetComponent<Renderer>().material.color = Color.Lerp(EndBarColor, EndBarLerpColor, Music.MusicalCos(lerpMusicalTime));
+		fieldMaterial.color = Color.Lerp(levels[currentLevel].materialColor, levels[currentLevel].lerpMaterialColor, Music.MusicalCos(lerpMusicalTime));
 
         if( Music.IsJustChangedBar() )
         {
-            MainCamera.backgroundColor = Music.Just.bar % 2 == 0 ?
+            MainCamera.backgroundColor = Music.Just.Bar % 2 == 0 ?
                 levels[currentLevel].BGColor : levels[currentLevel].BGChangeColor;
         }
     }
