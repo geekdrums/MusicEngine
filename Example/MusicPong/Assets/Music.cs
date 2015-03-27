@@ -74,7 +74,7 @@ public class Music : MonoBehaviour
 	/// <summary>
 	/// put your debug GUIText to see current musical time & section info.
 	/// </summary>
-	//public GUIText DebugText;
+	public TextMesh DebugText;
 	#endregion
 
 	#region public static properties
@@ -645,23 +645,16 @@ public class Music : MonoBehaviour
 			oldNear_.Copy(near_);
 			oldJust_.Copy(just_);
 		}
-
-		//DebugUpdateText();
-	}
-
-	/* DebugUpdateText
-	void DebugUpdateText()
-	{
+		
 		if( DebugText != null )
 		{
-			DebugText.text = "Just_ = " + Just_.ToString() + ", MusicalTime = " + MusicalTime_;
+			DebugText.text = "Just = " + Just.ToString() + ", MusicalTime = " + MusicalTime_;
 			if( Sections.Count > 0 )
 			{
-				DebugText.text += System.Environment.NewLine + "section[" + SectionIndex_ + "] = " + CurrentSection_.ToString();
+				DebugText.text += System.Environment.NewLine + "section[" + sectionIndex_ + "] = " + CurrentSection_.ToString();
 			}
 		}
 	}
-	*/
 
 	void CallEvents()
 	{
