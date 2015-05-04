@@ -113,7 +113,7 @@ public class Field : MonoBehaviour {
 
         EndBar.transform.localScale = Vector3.Lerp( EndBar.transform.localScale, endbarGameOverScale, 0.2f );
 
-        if( Music.IsJustChangedAt( Music.CurrentSection.StartTiming.Bar + 3 ) )
+        if( Music.IsJustChangedAt( Music.CurrentSection.StartBar + 3 ) )
         {
             Music.Stop();
         }
@@ -134,7 +134,7 @@ public class Field : MonoBehaviour {
 
         EndBar.transform.localScale = Vector3.Lerp( EndBar.transform.localScale, endbarGameOverScale, 0.2f );
 
-        if( Music.IsJustChangedAt( Music.CurrentSection.StartTiming.Bar + 3 ) )
+		if( Music.IsJustChangedAt(Music.CurrentSection.StartBar + 3) )
         {
             Music.Stop();
         }
