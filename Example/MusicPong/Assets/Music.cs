@@ -31,7 +31,7 @@ public class Music : MonoBehaviour
 		// this will be automatically setted on validate.
 		public int StartTimeSamples;
 		// this will only work when CreateSectionClips == true.
-		public ClipType Type;
+		public ClipType LoopType;
 
 		public Section(int startBar, int mtBeat = 4, int mtBar = 16, double tempo = 120)
 		{
@@ -369,7 +369,7 @@ public class Music : MonoBehaviour
 		Next2Bar,
 		Next4Bar,
 		Next8Bar,
-		NextSection,
+		SectionEnd,
 	}
 
 	public static void SetNextSection(int sectionIndex, SyncType syncType = SyncType.NextBar)
@@ -523,7 +523,7 @@ public class Music : MonoBehaviour
 				AudioSource sectionSource = new GameObject("section_" + Sections[i].Name, typeof(AudioSource)).GetComponent<AudioSource>();
 				sectionSource.transform.parent = this.transform;
 				sectionSource.clip = clips[i];
-				sectionSource.loop = Sections[i].Type == Section.ClipType.Loop;
+				sectionSource.loop = Sections[i].LoopType == Section.ClipType.Loop;
 				sectionSource.outputAudioMixerGroup = musicSource_.outputAudioMixerGroup;
 				sectionSource.volume = musicSource_.volume;
 				sectionSource.pitch = musicSource_.pitch;
@@ -597,8 +597,8 @@ public class Music : MonoBehaviour
 			musicSource_.playOnAwake = false;
 			for( int i = 0; i < Sections.Count; i++ )
 			{
-				if( Sections[i].Type == Section.ClipType.None )
-					Sections[i].Type = Section.ClipType.Loop;
+				if( Sections[i].LoopType == Section.ClipType.None )
+					Sections[i].LoopType = Section.ClipType.Loop;
 			}
 		}
 	}
@@ -636,9 +636,9 @@ public class Music : MonoBehaviour
 			{
 				samplesInLoop_ = musicSource_.clip.samples;
 				numLoopBar_ = Mathf.RoundToInt(samplesInLoop_ / (float)samplesPerBar_);
-				if( CurrentSection_.Type == Section.ClipType.Through )
+				if( CurrentSection_.LoopType == Section.ClipType.Through )
 				{
-					SetNextSection_(sectionIndex_ + 1, SyncType.NextSection);
+					SetNextSection_(sectionIndex_ + 1, SyncType.SectionEnd);
 				}
 			}
 		}
@@ -741,14 +741,14 @@ public class Music : MonoBehaviour
 			transitionTiming_.Bar += 8;
 			transitionTiming_.Beat = transitionTiming_.Unit = 0;
 			break;
-		case SyncType.NextSection:
+		case SyncType.SectionEnd:
 			syncUnit = samplesInLoop_;
 			transitionTiming_.Bar = CurrentSection_.StartBar + numLoopBar_;
 			transitionTiming_.Beat = transitionTiming_.Unit = 0;
 			break;
 		}
 		transitionTiming_.Fix(CurrentSection_);
-		if( CurrentSection_.Type == Section.ClipType.Loop && transitionTiming_.Bar >= CurrentSection_.StartBar + numLoopBar_ )
+		if( CurrentSection_.LoopType == Section.ClipType.Loop && transitionTiming_.Bar >= CurrentSection_.StartBar + numLoopBar_ )
 		{
 			transitionTiming_.Bar -= numLoopBar_;
 		}
@@ -826,7 +826,7 @@ public class Music : MonoBehaviour
 			just_.Fix(CurrentSection_);
 			if( CreateSectionClips )
 			{
-				if( CurrentSection_.Type == Section.ClipType.Loop && numLoopBar_ > 0 )
+				if( CurrentSection_.LoopType == Section.ClipType.Loop && numLoopBar_ > 0 )
 				{
 					just_.Bar -= CurrentSection_.StartBar;
 					while( just_.Bar >= numLoopBar_ )
@@ -838,7 +838,7 @@ public class Music : MonoBehaviour
 
 				if( isTransitioning_ && just_.Equals(transitionTiming_) )
 				{
-					if( CurrentSection_.Type == Section.ClipType.Loop && just_.Bar == CurrentSection_.StartBar )
+					if( CurrentSection_.LoopType == Section.ClipType.Loop && just_.Bar == CurrentSection_.StartBar )
 						just_.Bar = CurrentSection_.StartBar + numLoopBar_;
 					just_.Decrement(CurrentSection_);
 				}
