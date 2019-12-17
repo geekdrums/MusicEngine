@@ -12,11 +12,12 @@ public class MusicGUIController : MonoBehaviour {
 
 	// Use this for initialization
 	void Start () {
-		Music.Play(name);
+		//Music.Play(name);
 	}
 	
 	// Update is called once per frame
 	void OnGUI () {
+		/*
 		if( GUI.Button(PlayButton, Music.IsPlaying || Music.IsTransitioning ? "Stop" : "Play") )
 		{
 			if( Music.IsPlaying ) Music.Stop();
@@ -37,5 +38,6 @@ public class MusicGUIController : MonoBehaviour {
 		{
 			Music.SetNextSection(sectionIndex_, Music.SyncType.NextBar);
 		}
+		*/
 	}
 }

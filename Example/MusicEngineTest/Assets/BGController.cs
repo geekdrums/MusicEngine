@@ -12,7 +12,7 @@ public class BGController : MonoBehaviour {
 	
 	// Update is called once per frame
 	void Update () {
-		if( Music.IsJustChangedSection() )
+		if( Music.IsJustChangedAt(0) )
 		{
 			Camera.main.backgroundColor = SecionColors[Music.CurrentSectionIndex];
 		}
