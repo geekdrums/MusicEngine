@@ -9,6 +9,8 @@ public interface IMusicSource
 
 	bool IsPlaying { get; }
 
+	bool IsValid { get; }
+
 	string SequenceName { get; }
 
 	int SequenceIndex { get; }

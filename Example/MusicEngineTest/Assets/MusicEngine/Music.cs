@@ -4,13 +4,15 @@
 //Feel free to use this for your lovely musical games :)
 
 using UnityEngine;
+using UnityEngine.UI;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 
-[RequireComponent(typeof(IMusicSource))]
 public class Music : MonoBehaviour
 {
+	public TextMesh DebugText;
+
 	#region static params
 
 	static Music Current_;
@@ -105,15 +107,6 @@ public class Music : MonoBehaviour
 	public static float MusicalCos(float cycle = 16, float offset = 0, float min = 0, float max = 1)
 	{
 		return Mathf.Lerp(min, max, ((float)Math.Cos(Math.PI * 2 * (CurrentUnitPerBar * MusicalTime + offset) / cycle) + 1.0f) / 2.0f);
-	}
-
-
-	public static string DebugText
-	{
-		get
-		{
-			return String.Format("Just = {0}, MusicalTime = {1}", Just.ToString(), MusicalTime);
-		}
 	}
 
 	#endregion
@@ -501,6 +494,12 @@ public class Music : MonoBehaviour
 				{
 					OnRepeated();
 				}
+			}
+
+
+			if( DebugText != null )
+			{
+				DebugText.text = String.Format("Just = {0}, MusicalTime = {1}", Just.ToString(), MusicalTime);
 			}
 		}
 	}

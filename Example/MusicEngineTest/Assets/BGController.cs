@@ -14,7 +14,7 @@ public class BGController : MonoBehaviour {
 	void Update () {
 		if( Music.IsJustChangedAt(0) )
 		{
-			Camera.main.backgroundColor = SecionColors[Music.CurrentSectionIndex];
+			Camera.main.backgroundColor = SecionColors[Music.CurrentSequenceIndex];
 		}
 	}
 }

@@ -10,7 +10,8 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>10.0.20506</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <RootNamespace></RootNamespace>
+    <RootNamespace>
+    </RootNamespace>
     <ProjectGuid>{9F4FF1ED-4333-F511-B2A1-152C15D003E9}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
@@ -71,7 +72,6 @@
     <Compile Include="Assets\MusicEngine\MusicSourceUnity.cs" />
     <Compile Include="Assets\MusicEngine\Tiimng.cs" />
     <Compile Include="Assets\MusicGUIController.cs" />
-    <Compile Include="Assets\MusicOld.cs" />
     <Reference Include="Unity.Timeline.Editor">
       <HintPath>C:/Users/geekdrums/Documents/GitHub/MusicEngine/Example/MusicEngineTest/Library/ScriptAssemblies/Unity.Timeline.Editor.dll</HintPath>
     </Reference>
