@@ -1,16 +1,18 @@
-//Copyright (c) 2014 geekdrums
+//Copyright (c) 2019 geekdrums
 //Released under the MIT license
 //http://opensource.org/licenses/mit-license.php
 //Feel free to use this for your lovely musical games :)
 
 using UnityEngine;
+using UnityEngine.UI;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 
-[RequireComponent(typeof(IMusicSource))]
 public class Music : MonoBehaviour
 {
+	public TextMesh DebugText;
+
 	#region static params
 
 	static Music Current_;
@@ -68,7 +70,15 @@ public class Music : MonoBehaviour
 	/// <summary>
 	/// current musical meter
 	/// </summary>
-	public static Meter Meter { get { return Current_.currentMeter_; } }
+	public static MusicMeter Meter { get { return Current_.currentMeter_; } }
+	public static int CurrentUnitPerBar { get { return Current_.currentMeter_.UnitPerBar; } }
+	public static int CurrentUnitPerBeat { get { return Current_.currentMeter_.UnitPerBeat; } }
+	public static double CurrentTempo { get { return Current_.currentMeter_.Tempo; } }
+
+	public static string CurrentMusicName { get { return Current_.name; } }
+	public static string CurrentSequenceName { get { return Current_.musicSource_.SequenceName; } }
+	public static int CurrentSequenceIndex { get { return Current_.musicSource_.SequenceIndex; } }
+
 	/// <summary>
 	/// current musical time in units
 	/// </summary>
@@ -97,19 +107,6 @@ public class Music : MonoBehaviour
 	public static float MusicalCos(float cycle = 16, float offset = 0, float min = 0, float max = 1)
 	{
 		return Mathf.Lerp(min, max, ((float)Math.Cos(Math.PI * 2 * (CurrentUnitPerBar * MusicalTime + offset) / cycle) + 1.0f) / 2.0f);
-	}
-
-	public static int CurrentUnitPerBar { get { return Current_.currentMeter_.UnitPerBar; } }
-	public static int CurrentUnitPerBeat { get { return Current_.currentMeter_.UnitPerBeat; } }
-	public static double CurrentTempo { get { return Current_.currentMeter_.Tempo; } }
-	public static string CurrentMusicName { get { return Current_.name; } }
-
-	public static string DebugText
-	{
-		get
-		{
-			return String.Format("Just = {0}, MusicalTime = {1}", Just.ToString(), MusicalTime);
-		}
 	}
 
 	#endregion
@@ -228,7 +225,7 @@ public class Music : MonoBehaviour
 	private IMusicSource musicSource_;
 
 	// 現在再生中の箇所のメーター情報。
-	private Meter currentMeter_;
+	private MusicMeter currentMeter_;
 	// 最新のJustタイミング。(タイミングちょうどになってから切り替わる）
 	private Timing just_;
 	// 最新のNearタイミング。（最も近いタイミングが変わった地点、つまり2つのタイミングの中間で切り替わる）
@@ -450,6 +447,10 @@ public class Music : MonoBehaviour
 		isJustLooped_ = false;
 		isNearLooped_ = false;
 		
+		if( musicSource_ is MusicSourceUnity )
+		{
+			musicSource_.CheckHorizontalSequenceChanged();
+		}
 		currentSample_ = musicSource_.GetCurrentSample();
 		if( currentSample_ >= 0 )
 		{
@@ -488,7 +489,7 @@ public class Music : MonoBehaviour
 
 			if( isJustLooped_ )
 			{
-				string oldSequenceName = musicSource_.PlayingSequenceName;
+				string oldSequenceName = musicSource_.SequenceName;
 				if( musicSource_.CheckHorizontalSequenceChanged() )
 				{
 					OnHorizontalSequenceChanged();
@@ -497,6 +498,12 @@ public class Music : MonoBehaviour
 				{
 					OnRepeated();
 				}
+			}
+
+
+			if( DebugText != null )
+			{
+				DebugText.text = String.Format("Just = {0}, MusicalTime = {1}", Just.ToString(), MusicalTime);
 			}
 		}
 	}
@@ -519,7 +526,7 @@ public class Music : MonoBehaviour
 		sequenceEndBar_ = musicSource_.GetSequenceEndBar();
 		if( OnTransitionedEvent != null )
 		{
-			OnTransitionedEvent(musicSource_.PlayingSequenceName);
+			OnTransitionedEvent(musicSource_.SequenceName);
 			OnTransitionedEvent = null;
 		}
 	}

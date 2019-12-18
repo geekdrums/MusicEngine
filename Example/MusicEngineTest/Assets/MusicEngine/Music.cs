@@ -447,6 +447,10 @@ public class Music : MonoBehaviour
 		isJustLooped_ = false;
 		isNearLooped_ = false;
 		
+		if( musicSource_ is MusicSourceUnity )
+		{
+			musicSource_.CheckHorizontalSequenceChanged();
+		}
 		currentSample_ = musicSource_.GetCurrentSample();
 		if( currentSample_ >= 0 )
 		{

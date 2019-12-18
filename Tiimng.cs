@@ -21,7 +21,7 @@ public class Timing : IComparable<Timing>, IEquatable<Timing>
 	{
 		return Bar == 0 && Beat == 0 && Unit == 0;
 	}
-	public int GetTotalUnits(Meter meter)
+	public int GetTotalUnits(MusicMeter meter)
 	{
 		return Bar * meter.UnitPerBar + Beat * meter.UnitPerBeat + Unit;
 	}
@@ -33,7 +33,7 @@ public class Timing : IComparable<Timing>, IEquatable<Timing>
 	public void Set(Timing t) { Bar = t.Bar; Beat = t.Beat; Unit = t.Unit; }
 	public void Reset() { Bar = 0; Beat = 0; Unit = 0; }
 
-	public void Fix(Meter meter)
+	public void Fix(MusicMeter meter)
 	{
 		int totalUnit = Bar * meter.UnitPerBar + Beat * meter.UnitPerBeat + Unit;
 		Bar = totalUnit / meter.UnitPerBar;
@@ -48,7 +48,7 @@ public class Timing : IComparable<Timing>, IEquatable<Timing>
 			Beat = Unit = 0;
 		}
 	}
-	public void LoopBack(int loopBar, Meter meter)
+	public void LoopBack(int loopBar, MusicMeter meter)
 	{
 		if( loopBar > 0 )
 		{
@@ -58,31 +58,31 @@ public class Timing : IComparable<Timing>, IEquatable<Timing>
 		}
 	}
 
-	public void Increment(Meter meter)
+	public void Increment(MusicMeter meter)
 	{
 		++Unit;
 		Fix(meter);
 	}
-	public void Decrement(Meter meter)
+	public void Decrement(MusicMeter meter)
 	{
 		--Unit;
 		Fix(meter);
 	}
-	public void Add(int bar, int beat, int unit, Meter meter)
+	public void Add(int bar, int beat, int unit, MusicMeter meter)
 	{
 		Bar += bar; Beat += beat; Unit += unit;
 		Fix(meter);
 	}
-	public void Add(Timing t, Meter meter)
+	public void Add(Timing t, MusicMeter meter)
 	{
 		Add(t.Bar, t.Beat, t.Unit, meter);
 	}
-	public void Subtract(int bar, int beat, int unit, Meter meter)
+	public void Subtract(int bar, int beat, int unit, MusicMeter meter)
 	{
 		Bar -= bar; Beat -= beat; Unit -= unit;
 		Fix(meter);
 	}
-	public void Subtract(Timing t, Meter meter)
+	public void Subtract(Timing t, MusicMeter meter)
 	{
 		Subtract(t.Bar, t.Beat, t.Unit, meter);
 	}

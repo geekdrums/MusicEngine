@@ -9,7 +9,11 @@ public interface IMusicSource
 
 	bool IsPlaying { get; }
 
-	string PlayingSequenceName { get; }
+	bool IsValid { get; }
+
+	string SequenceName { get; }
+
+	int SequenceIndex { get; }
 
 
 	void Play();
@@ -24,7 +28,7 @@ public interface IMusicSource
 
 	int GetSampleRate();
 
-	Meter GetCurrentMeter(int currentSample);
+	MusicMeter GetCurrentMeter(int currentSample);
 
 
 
