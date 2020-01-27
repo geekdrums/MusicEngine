@@ -4,16 +4,47 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class MusicSection : MonoBehaviour
+[Serializable]
+public class MusicSection
 {
+	public string Name = "Section";
 	public AudioClip[] Clips = new AudioClip[1];
-
 	public MusicMeter[] Meters = new MusicMeter[1] { new MusicMeter(0) };
 
 	public Timing EntryPointTiming = new Timing();
 	public Timing ExitPointTiming = new Timing();
 	public Timing LoopStartTiming = new Timing();
 	public Timing LoopEndTiming = new Timing();
+
+	public TransitionParams Transition;
+
+	[Serializable]
+	public class TransitionParams
+	{
+		public TransitionParams() { }
+		public TransitionParams(TransitionParams other)
+		{
+			SyncType = other.SyncType;
+			SyncFactor = other.SyncFactor;
+			UseFadeOut = other.UseFadeOut;
+			FadeOutTime = other.FadeOutTime;
+			FadeOutOffset = other.FadeOutOffset;
+			UseFadeIn = other.UseFadeIn;
+			FadeInTime = other.FadeInTime;
+			FadeInOffset = other.FadeInOffset;
+		}
+
+		public Music.SyncType SyncType = Music.SyncType.Bar;
+		public int SyncFactor = 1;
+
+		public bool UseFadeOut = false;
+		public float FadeOutTime;
+		public float FadeOutOffset;
+
+		public bool UseFadeIn = false;
+		public float FadeInTime;
+		public float FadeInOffset;
+	}
 
 	public enum ETransitionType
 	{
@@ -30,8 +61,7 @@ public class MusicSection : MonoBehaviour
 	public int EntryPointSample { get; private set; }
 	public int ExitPointSample { get; private set; }
 
-	
-	void OnValidate()
+	public void Initialize()
 	{
 		IsValid = false;
 		if( Clips.Length == 0 || Clips[0] == null || Meters.Length == 0 )
@@ -56,20 +86,21 @@ public class MusicSection : MonoBehaviour
 			lastMeter = meter;
 		}
 
-		// ExitPointが未割り当てだったら、波形終わりのタイミングを参考に設定する
-		if( EntryPointTiming >= ExitPointTiming )
+		Timing clipEndTiming = lastMeter.GetTimingFromSample(Clips[0].samples);
+		// 波形終わりのタイミングを参考にExitPointを設定する
+		if( ExitPointTiming <= EntryPointTiming || clipEndTiming < ExitPointTiming )
 		{
-			ExitPointTiming = lastMeter.GetTimingFromSample(Clips[0].samples);
-			ExitPointTiming.FixToCeil();
+			ExitPointTiming = new Timing(clipEndTiming);
+			ExitPointTiming.FixToFloor();
+		}
+		if( clipEndTiming < LoopEndTiming )
+		{
+			LoopEndTiming = new Timing(clipEndTiming);
+			LoopEndTiming.FixToFloor();
 		}
 
 		if( TransitionType == ETransitionType.Loop )
 		{
-			// LoopStartはEntryPointより後じゃないとダメ
-			if( LoopStartTiming < EntryPointTiming )
-			{
-				LoopStartTiming.Set(EntryPointTiming);
-			}
 			// LoopEndはLoopStartより後じゃないとダメ
 			if( LoopStartTiming >= LoopEndTiming )
 			{
@@ -87,7 +118,7 @@ public class MusicSection : MonoBehaviour
 		IsValid = true;
 	}
 
-	int GetSampleFromTiming(Timing timing)
+	public int GetSampleFromTiming(Timing timing)
 	{
 		Timing nextMeterTiming = new Timing();
 		if( timing < nextMeterTiming )

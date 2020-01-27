@@ -15,6 +15,7 @@ public interface IMusicSource
 
 	int SequenceIndex { get; }
 
+	void Initialize();
 
 	void Play();
 
@@ -24,17 +25,19 @@ public interface IMusicSource
 
 	void Resume();
 
+	void Seek(int sequenceIndex, Timing seekTiming);
+
 	int GetCurrentSample();
 
 	int GetSampleRate();
 
-	MusicMeter GetCurrentMeter(int currentSample);
+	MusicMeter GetMeterFromSample(int currentSample);
 
 
 
-	int GetSequenceEndBar();
+	Timing GetSequenceEndTiming();
 
-	bool CheckHorizontalSequenceChanged();
+	void UpdateSequenceState();
 
 	void OnRepeated();
 

@@ -48,6 +48,11 @@ public class Timing : IComparable<Timing>, IEquatable<Timing>
 			Beat = Unit = 0;
 		}
 	}
+	public void FixToFloor()
+	{
+		Beat = 0;
+		Unit = 0;
+	}
 	public void LoopBack(int loopBar, MusicMeter meter)
 	{
 		if( loopBar > 0 )
@@ -68,26 +73,36 @@ public class Timing : IComparable<Timing>, IEquatable<Timing>
 		--Unit;
 		Fix(meter);
 	}
-	public void Add(int bar, int beat, int unit, MusicMeter meter)
+	public void Add(int bar, int beat = 0, int unit = 0, MusicMeter meter = null)
 	{
 		Bar += bar; Beat += beat; Unit += unit;
-		Fix(meter);
+		if( meter != null )
+		{
+			Fix(meter);
+		}
 	}
-	public void Add(Timing t, MusicMeter meter)
+	public void Add(Timing t, MusicMeter meter = null)
 	{
 		Add(t.Bar, t.Beat, t.Unit, meter);
 	}
-	public void Subtract(int bar, int beat, int unit, MusicMeter meter)
+	public void Subtract(int bar, int beat = 0, int unit = 0, MusicMeter meter = null)
 	{
 		Bar -= bar; Beat -= beat; Unit -= unit;
-		Fix(meter);
+		if( meter != null )
+		{
+			Fix(meter);
+		}
 	}
-	public void Subtract(Timing t, MusicMeter meter)
+	public void Subtract(Timing t, MusicMeter meter = null)
 	{
 		Subtract(t.Bar, t.Beat, t.Unit, meter);
 	}
 
-	public static bool operator ==(Timing t, Timing t2) { return (t.Bar == t2.Bar && t.Beat == t2.Beat && t.Unit == t2.Unit ); }
+	public static bool operator ==(Timing t, Timing t2)
+	{
+		return (object.ReferenceEquals(t, null) == true  && object.ReferenceEquals(t2, null) == true )
+			|| (object.ReferenceEquals(t, null) == false && object.ReferenceEquals(t2, null) == false && (t.Bar == t2.Bar && t.Beat == t2.Beat && t.Unit == t2.Unit));
+	}
 	public static bool operator !=(Timing t, Timing t2) { return !(t == t2); }
 	public static bool operator >(Timing t, Timing t2) { return t.Bar > t2.Bar || (t.Bar == t2.Bar && t.Beat > t2.Beat) || (t.Bar == t2.Bar && t.Beat == t2.Beat && t.Unit > t2.Unit); }
 	public static bool operator <(Timing t, Timing t2) { return !(t > t2) && !(t.Equals(t2)); }
@@ -104,11 +119,12 @@ public class Timing : IComparable<Timing>, IEquatable<Timing>
 		{
 			return true;
 		}
-		if( this.GetType() != obj.GetType() )
+		Timing other = (obj as Timing);
+		if( other == null )
 		{
 			return false;
 		}
-		return this.Equals(obj as Timing);
+		return (this.Bar == other.Bar && this.Beat == other.Beat && this.Unit == other.Unit);
 	}
 	public override int GetHashCode()
 	{

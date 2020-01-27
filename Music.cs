@@ -23,6 +23,16 @@ public class Music : MonoBehaviour
 	static HorizontalSequenceEvent OnRepeatedEvent;
 	static readonly float PITCH_UNIT = Mathf.Pow(2.0f, 1.0f / 12.0f);
 
+	public enum SyncType
+	{
+		Immediate,
+		Unit,
+		Beat,
+		Bar,
+		Marker,
+		ExitPoint,
+	};
+
 	#endregion
 
 
@@ -67,6 +77,8 @@ public class Music : MonoBehaviour
 	/// </summary>
 	public static double UnitFromJust { get { return Current_.UnitFromJust_; } }
 
+
+	public static bool HasValidMeter { get { return Current_ != null && Current_.currentMeter_ != null; } }
 	/// <summary>
 	/// current musical meter
 	/// </summary>
@@ -164,18 +176,50 @@ public class Music : MonoBehaviour
 	/// <summary>
 	/// Change Current Music.
 	/// </summary>
-	/// <param name="MusicName">name of the GameObject that include Music</param>
-	public static void Play(string MusicName)
+	/// <param name="musicName">name of the GameObject that include Music</param>
+	public static void Play(string musicName)
 	{
-		Music music = MusicList.Find((Music m) => m != null && m.name == MusicName);
+		Music music = MusicList.Find((Music m) => m != null && m.name == musicName);
 		if( music != null )
 		{
-			music.Play_();
+			Play(music);
 		}
 		else
 		{
-			Debug.Log("Can't find music: " + MusicName);
+			Debug.Log("Can't find music: " + musicName);
 		}
+	}
+
+	public static void Play(Music music)
+	{
+		if( Current_ != null && IsPlaying )
+		{
+			Stop();
+		}
+
+		Current_ = music;
+
+		music.Play_();
+	}
+
+	public static void PlayFrom(string musicName, int sequenceIndex, Timing seekTiming)
+	{
+		Music music = MusicList.Find((Music m) => m != null && m.name == musicName);
+		if( music != null )
+		{
+			music.Seek_(sequenceIndex, seekTiming);
+			Play(music);
+		}
+		else
+		{
+			Debug.Log("Can't find music: " + musicName);
+		}
+	}
+
+	public static void PlayFrom(Music music, int sequenceIndex, Timing seekTiming)
+	{
+		music.Seek_(sequenceIndex, seekTiming);
+		Play(music);
 	}
 
 	public static void Suspend() { Current_.musicSource_.Suspend(); }
@@ -187,24 +231,14 @@ public class Music : MonoBehaviour
 
 	#region interactive music functions
 
-	public void SetHorizontalSequence(string name, HorizontalSequenceEvent onTransitioned = null)
+	public void SetHorizontalSequence(string name)
 	{
 		Current_.musicSource_.SetHorizontalSequence(name);
-		OnTransitionedEvent = null;
-		if( onTransitioned != null )
-		{
-			OnTransitionedEvent += onTransitioned;
-		}
 	}
 
-	public void SetHorizontalSequenceByIndex(int index, HorizontalSequenceEvent onTransitioned = null)
+	public void SetHorizontalSequenceByIndex(int index)
 	{
 		Current_.musicSource_.SetHorizontalSequenceByIndex(index);
-		OnTransitionedEvent = null;
-		if( onTransitioned != null )
-		{
-			OnTransitionedEvent += onTransitioned;
-		}
 	}
 
 	public void SetVerticalMix(float param)
@@ -255,7 +289,7 @@ public class Music : MonoBehaviour
 	// 現在のループカウント。
 	private int numRepeat_;
 	// 現在のシーケンス（横の遷移の単位）の小節数。
-	private int sequenceEndBar_ = 0;
+	private Timing sequenceEndTiming_ = null;
 	
 	#endregion
 
@@ -278,7 +312,7 @@ public class Music : MonoBehaviour
 
 	private int JustTotalUnits_ { get { return just_.GetTotalUnits(currentMeter_); } }
 	private int NearTotalUnits_ { get { return near_.GetTotalUnits(currentMeter_); } }
-	private float MusicalTime_ { get { return currentMeter_.GetMusicalTime(just_, samplesFromJust_); } }
+	private float MusicalTime_ { get { return currentMeter_ != null ? currentMeter_.GetMusicalTime(just_, samplesFromJust_) : -1.0f; } }
 	
 	#endregion
 
@@ -347,8 +381,8 @@ public class Music : MonoBehaviour
 		{
 			Current_ = this;
 		}
-
-		currentMeter_ = musicSource_.GetCurrentMeter(0);
+		musicSource_.Initialize();
+		currentMeter_ = musicSource_.GetMeterFromSample(0);
 		sampleRate_ = musicSource_.GetSampleRate();
 
 		Initialize();
@@ -361,7 +395,7 @@ public class Music : MonoBehaviour
 #endif
 		if( musicSource_.PlayOnStart )
 		{
-			Play_();
+			Music.Play(this);
 		}
 	}
 	
@@ -402,8 +436,8 @@ public class Music : MonoBehaviour
 		isNearChanged_ = false;
 		isJustLooped_ = false;
 		isNearLooped_ = false;
-		near_ = new Timing(0, 0, -1);
-		just_ = new Timing(0, 0, -1);
+		near_ = new Timing(-1, 0, 0);
+		just_ = new Timing(-1, 0, 0);
 		oldNear_ = new Timing(near_);
 		oldJust_ = new Timing(just_);
 		samplesFromJust_ = 0;
@@ -413,12 +447,6 @@ public class Music : MonoBehaviour
 
 	public void Play_()
 	{
-		if( Current_ != null && IsPlaying )
-		{
-			Stop();
-		}
-
-		Current_ = this;
 		Initialize();
 
 		musicSource_.Play();
@@ -426,10 +454,12 @@ public class Music : MonoBehaviour
 
 	public void Stop_()
 	{
-		if( musicSource_ != null && musicSource_.IsPlaying )
-		{
-			musicSource_.Stop();
-		}
+		musicSource_.Stop();
+	}
+
+	public void Seek_(int sequenceIndex, Timing seekTiming)
+	{
+		musicSource_.Seek(sequenceIndex, seekTiming);
 	}
 
 	#endregion
@@ -446,13 +476,22 @@ public class Music : MonoBehaviour
 		isJustChanged_ = false;
 		isJustLooped_ = false;
 		isNearLooped_ = false;
+
+		int oldSequenceIndex = musicSource_.SequenceIndex;
+		musicSource_.UpdateSequenceState();
 		
-		if( musicSource_ is MusicSourceUnity )
-		{
-			musicSource_.CheckHorizontalSequenceChanged();
-		}
 		currentSample_ = musicSource_.GetCurrentSample();
-		if( currentSample_ >= 0 )
+		if( currentSample_ < 0 )
+		{
+			return;
+		}
+
+		currentMeter_ = musicSource_.GetMeterFromSample(currentSample_);
+		if( currentMeter_ == null )
+		{
+			just_.Set(-1, 0, 0);
+		}
+		else
 		{
 			int meterSample = currentSample_ - currentMeter_.StartSamples;
 			int bar = (int)(meterSample / currentMeter_.SamplesPerBar);
@@ -470,15 +509,16 @@ public class Music : MonoBehaviour
 				near_.Increment(currentMeter_);
 			}
 
-			if( sequenceEndBar_ > 0 )
+
+			if( sequenceEndTiming_ != null )
 			{
-				while( just_.Bar >= sequenceEndBar_ )
+				while( just_ >= sequenceEndTiming_ )
 				{
 					just_.Decrement(currentMeter_);
 				}
-				if( near_.Bar >= sequenceEndBar_ )
+				if( near_ >= sequenceEndTiming_ )
 				{
-					near_.LoopBack(sequenceEndBar_, currentMeter_);
+					near_.Reset();
 				}
 			}
 
@@ -489,8 +529,7 @@ public class Music : MonoBehaviour
 
 			if( isJustLooped_ )
 			{
-				string oldSequenceName = musicSource_.SequenceName;
-				if( musicSource_.CheckHorizontalSequenceChanged() )
+				if( oldSequenceIndex != musicSource_.SequenceIndex )
 				{
 					OnHorizontalSequenceChanged();
 				}
@@ -499,12 +538,12 @@ public class Music : MonoBehaviour
 					OnRepeated();
 				}
 			}
+		}
 
 
-			if( DebugText != null )
-			{
-				DebugText.text = String.Format("Just = {0}, MusicalTime = {1}", Just.ToString(), MusicalTime);
-			}
+		if( DebugText != null )
+		{
+			DebugText.text = String.Format("Just = {0}, MusicalTime = {1}", Just.ToString(), MusicalTime);
 		}
 	}
 
@@ -523,7 +562,7 @@ public class Music : MonoBehaviour
 	{
 		numRepeat_ = 0;
 		musicSource_.OnHorizontalSequenceChanged();
-		sequenceEndBar_ = musicSource_.GetSequenceEndBar();
+		sequenceEndTiming_ = musicSource_.GetSequenceEndTiming();
 		if( OnTransitionedEvent != null )
 		{
 			OnTransitionedEvent(musicSource_.SequenceName);

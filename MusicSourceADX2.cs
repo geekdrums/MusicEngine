@@ -1,4 +1,7 @@
-﻿using System;
+﻿//#define ADX2
+#if ADX2
+
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -8,7 +11,7 @@ using UnityEngine.UI;
 [RequireComponent(typeof(CriAtomSource))]
 public class MusicSourceADX2 : MonoBehaviour, IMusicSource
 {
-	#region interactive music params
+#region interactive music params
 
 	public Meter Meter = new Meter(0);
 
@@ -22,20 +25,20 @@ public class MusicSourceADX2 : MonoBehaviour, IMusicSource
 	[TooltipAttribute("SetVerticalMixByName関数で使われるセレクタ名")]
 	public string SelectorName = "";
 
-	#endregion
+#endregion
 
 
-	#region ADX2 resources
+#region ADX2 resources
 
 	private CriAtomSource atomSource_;
 	private CriAtomExPlayback playback_;
 	private CriAtomExAcb acbData_;
 	private CriAtomEx.CueInfo cueInfo_;
 
-	#endregion
+#endregion
 
 
-	#region block params
+#region block params
 
 	[System.Serializable]
 	public class BlockInfo
@@ -64,10 +67,10 @@ public class MusicSourceADX2 : MonoBehaviour, IMusicSource
 		nextBlockIndex_ = 0;
 	}
 
-	#endregion
+#endregion
 
 
-	#region unity functions
+#region unity functions
 
 	void Awake()
 	{
@@ -90,16 +93,18 @@ public class MusicSourceADX2 : MonoBehaviour, IMusicSource
 	{
 	}
 
-	#endregion
+#endregion
 
 
-	#region IMusicSource
+#region IMusicSource
 
 	public bool PlayOnStart { get; private set; }
 
 	public bool IsPlaying { get { return atomSource_ != null && atomSource_.status == CriAtomSource.Status.Playing; } }
 
-	public string PlayingSequenceName { get { return CurrentBlock.BlockName; } }
+	public string SequenceName { get { return CurrentBlock.BlockName; } }
+
+	public int SequenceIndex { get { return currentBlockIndex_; } }
 
 	public void Play()
 	{
@@ -158,16 +163,14 @@ public class MusicSourceADX2 : MonoBehaviour, IMusicSource
 		return Meter;
 	}
 
-	public bool CheckHorizontalSequenceChanged()
+	public void UpdateSequenceState()
 	{
-		oldBlockIndex_ = currentBlockIndex_;
 		currentBlockIndex_ = playback_.GetCurrentBlockIndex();
-		return oldBlockIndex_ != currentBlockIndex_;
 	}
 
-	public int GetSequenceEndBar()
+	public Timing GetSequenceEndTiming()
 	{
-		return BlockInfos[currentBlockIndex_].NumBar;
+		return new Timing(BlockInfos[currentBlockIndex_].NumBar);
 	}
 
 	public void OnRepeated()
@@ -228,10 +231,10 @@ public class MusicSourceADX2 : MonoBehaviour, IMusicSource
 		}
 	}
 
-	#endregion
+#endregion
 
 
-	#region ADX2 unique functions
+#region ADX2 unique functions
 
 	public void SetFirstBlock(string blockName)
 	{
@@ -275,5 +278,7 @@ public class MusicSourceADX2 : MonoBehaviour, IMusicSource
 		return String.Format("block[{0}] = {1}({2}bar)", currentBlockIndex_, CurrentBlock.BlockName, BlockInfos[currentBlockIndex_].NumBar);
 	}
 	
-	#endregion
+#endregion
 }
+
+#endif

@@ -16,6 +16,8 @@ public class MusicMeter
 	public int SamplesPerUnit { get; private set; }
 	public int SamplesPerBeat { get; private set; }
 	public int SamplesPerBar { get; private set; }
+	public double SecPerBar { get; private set; }
+	public double SecPerBeat { get; private set; }
 	public double SecPerUnit { get; private set; }
 
 	public MusicMeter(int startBar, int unitPerBeat = 4, int unitPerBar = 16, double tempo = 120)
@@ -35,6 +37,8 @@ public class MusicMeter
 		SamplesPerBeat = (int)(samplingRate * beatSec);
 		SamplesPerBar = (int)(samplingRate * UnitPerBar * (beatSec / UnitPerBeat));
 		SecPerUnit = (double)SamplesPerUnit / (double)samplingRate;
+		SecPerBeat = (double)SamplesPerBeat / (double)samplingRate;
+		SecPerBar = (double)SamplesPerBar / (double)samplingRate;
 	}
 
 	public float GetMusicalTime(Timing just, int samplesFromJust)
