@@ -7,13 +7,23 @@ using UnityEngine.UI;
 
 public class MusicSourceUnity : MonoBehaviour, IMusicSource
 {
+	#region editor params
+
 	[Range(0,1)]
 	public float Volume = 1.0f;
 	public bool _PlayOnStart;
+	public bool SeekOnPlay;
+	public int SeekSection;
+	public Timing SeekTiming;
 	public AudioMixerGroup OutputMixerGroup;
-
 	public MusicSection[] Sections = new MusicSection[1] { new MusicSection() };
 
+	#endregion
+
+
+	#region properties
+
+	// states
 	public enum EState
 	{
 		Invalid,
@@ -23,7 +33,6 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		Finished
 	}
 	public EState State { get; private set; } = EState.Invalid;
-
 	public enum ETransitionState
 	{
 		Invalid = 0,
@@ -36,16 +45,17 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 	};
 	public ETransitionState TransitionState { get; private set; } = ETransitionState.Invalid;
 
+	// sources
 	private AudioSource[] musicSources_;
 	private AudioSource[] transitionMusicSources_;
 
+	// params
 	private int sectionIndex_ = 0;
 	private int nextSectionIndex_ = -1;
 	private int numTracks_ = 0;
-
 	private double playedDSPTime_;
 
-	// transition
+	// fade
 	public class Fade
 	{
 		public Fade(bool isFadeOut)
@@ -87,25 +97,27 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		int fadeStartSample_;
 		int fadeLengthSample_;
 	}
-
 	private Fade transitionFadeIn_ = new Fade(false);
 	private Fade transitionFadeOut_ = new Fade(true);
 	private float transitionFadeInVolume_ = 1.0f;
 	private float transitionFadeOutVolume_ = 1.0f;
 
+	// transition
 	public class TransitionRequestParam
 	{
-		public TransitionRequestParam(int index, MusicSourceUnity music)
+		public TransitionRequestParam(int targetIndex, int currentIndex, MusicSourceUnity music)
 		{
-			SectionIndex = index;
-			Transition = new MusicSection.TransitionParams(music.Sections[index].Transition);
+			SectionIndex = targetIndex;
+			SyncType = music.Sections[currentIndex].SyncType;
+			SyncFactor = music.Sections[currentIndex].SyncFactor;
+			Transition = new MusicSection.TransitionParams(music.Sections[targetIndex].Transition);
 		}
 		public TransitionRequestParam(int index, MusicSourceUnity music, Music.SyncType syncType, int syncFactor = 1)
 		{
 			SectionIndex = index;
+			SyncType = syncType;
+			SyncFactor = syncFactor;
 			Transition = new MusicSection.TransitionParams(music.Sections[index].Transition);
-			Transition.SyncType = syncType;
-			Transition.SyncFactor = syncFactor;
 			if( syncType == Music.SyncType.ExitPoint )
 			{
 				Transition.UseFadeOut = false;
@@ -113,22 +125,15 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		}
 
 		public int SectionIndex;
+		public Music.SyncType SyncType = Music.SyncType.Bar;
+		public int SyncFactor = 1;
 		public MusicSection.TransitionParams Transition;
 	}
-
 	private TransitionRequestParam requenstedTransition_;
 
-	// 僅かに遅らせることでPlayとPlayScheduleのズレを回避 https://qiita.com/tatmos/items/4c78c127291a0c3b74ed
-	private static double SCHEDULE_DELAY = 0.1;
-	private static double ScheduleDSPTime { get { return AudioSettings.dspTime + SCHEDULE_DELAY; } }
-
-
-	#region properties
-
+	// section
 	public MusicSection CurrentSection { get { return Sections[sectionIndex_]; } }
-
 	public MusicSection NextSection { get { return Sections[nextSectionIndex_]; } }
-
 	public MusicSection this[int index]
 	{
 		get
@@ -144,12 +149,16 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 			}
 		}
 	}
+	
+	// 僅かに遅らせることでPlayとPlayScheduleのズレを回避 https://qiita.com/tatmos/items/4c78c127291a0c3b74ed
+	private static double SCHEDULE_DELAY = 0.1;
+	private static double ScheduleDSPTime { get { return AudioSettings.dspTime + SCHEDULE_DELAY; } }
 
 	#endregion
 
 
 	#region unity functions
-	
+
 	void OnValidate()
 	{
 		foreach( MusicSection section in Sections )
@@ -173,19 +182,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 	#endregion
 
 
-
-	#region IMusicSource
-
-	public bool PlayOnStart { get { return _PlayOnStart; } }
-
-	public bool IsPlaying { get { return State == EState.Playing; } }
-
-	public bool IsValid { get { return State != EState.Invalid; } }
-
-	public string SequenceName { get { return Sections[sectionIndex_].Name; } }
-
-	public int SequenceIndex { get { return sectionIndex_; } }
-
+	#region initialize
 
 	public void Initialize()
 	{
@@ -259,11 +256,31 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		}
 	}
 
+	#endregion
+
+
+	#region IMusicSource
+
+	public bool PlayOnStart { get { return _PlayOnStart; } }
+
+	public bool IsPlaying { get { return State == EState.Playing; } }
+
+	public bool IsValid { get { return State != EState.Invalid; } }
+
+	public string SequenceName { get { return Sections[sectionIndex_].Name; } }
+
+	public int SequenceIndex { get { return sectionIndex_; } }
+
+
 	public void Play()
 	{
 		if( State == EState.Invalid )
 		{
 			return;
+		}
+		if( SeekOnPlay )
+		{
+			Seek(SeekSection, SeekTiming);
 		}
 
 		State = EState.Playing;
@@ -354,6 +371,11 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		}
 
 		State = EState.Playing;
+
+		if( requenstedTransition_ != null )
+		{
+			SetNextSection(requenstedTransition_);
+		}
 	}
 
 	public void Seek(int sequenceIndex, Timing seekTiming)
@@ -416,8 +438,6 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		}
 		return res;
 	}
-
-
 
 	public Timing GetSequenceEndTiming()
 	{
@@ -539,6 +559,103 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		}
 	}
 
+	public void OnRepeated()
+	{
+	}
+
+	public void OnHorizontalSequenceChanged()
+	{
+	}
+	
+
+	public void SetHorizontalSequence(string name)
+	{
+		for( int i = 0; i < Sections.Length; ++i )
+		{
+			if( Sections[i].Name == name )
+			{
+				SetHorizontalSequenceByIndex(i);
+				break;
+			}
+		}
+	}
+
+	public void SetHorizontalSequenceByIndex(int index)
+	{
+		if( index < 0 || Sections.Length <= index || index == nextSectionIndex_ )
+		{
+			// インデックス範囲外、もしくは既に遷移確定済み
+			return;
+		}
+
+		if( requenstedTransition_ != null && requenstedTransition_.SectionIndex == index )
+		{
+			// 既にリクエスト済み
+			return;
+		}
+
+		switch( State )
+		{
+			case EState.Invalid:
+			case EState.Finished:
+				return;
+			case EState.Ready:
+				sectionIndex_ = index;
+				ResetAudioClips();
+				return;
+			case EState.Suspended:
+				requenstedTransition_ = new TransitionRequestParam(index, sectionIndex_, this);
+				return;
+			case EState.Playing:
+				break;
+		}
+
+		// 今と同じセクションが指定されたら
+		if( index == sectionIndex_ )
+		{
+			// 予約中のはキャンセル
+			requenstedTransition_ = null;
+			// 遷移中のはキャンセルできるならキャンセル
+			if( TransitionState == ETransitionState.Synced )
+			{
+				CancelSyncedTransition();
+				OnTransitionReady();
+			}
+			else if( TransitionState == ETransitionState.PreEntry )
+			{
+				requenstedTransition_ = new TransitionRequestParam(index, sectionIndex_, this);
+			}
+			return;
+		}
+		
+		switch( TransitionState )
+		{
+			case ETransitionState.Invalid:
+				return;
+			case ETransitionState.Intro:
+			case ETransitionState.Outro:
+			case ETransitionState.PreEntry:
+			case ETransitionState.PostEntry:
+				requenstedTransition_ = new TransitionRequestParam(index, sectionIndex_, this);
+				return;
+			default:
+			//case ETransitionState.Ready:
+			//case ETransitionState.Synced:
+				break;
+		}
+
+		SetNextSection(new TransitionRequestParam(index, sectionIndex_, this));
+	}
+
+	public void SetVerticalMix(float param) { }
+
+	public void SetVerticalMixByName(string name) { }
+
+	#endregion
+
+
+	#region horizontal
+
 	void UpdateVolumes()
 	{
 		float mainVolume = Volume;
@@ -600,7 +717,6 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		if( requenstedTransition_ != null )
 		{
 			SetNextSection(requenstedTransition_);
-			requenstedTransition_ = null;
 		}
 		else
 		{
@@ -653,10 +769,10 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		MusicMeter currentMeter = GetMeterFromSample(currentSample);
 		Timing currentTiming = currentMeter.GetTimingFromSample(currentSample);
 		int entryPointSample = requestedSection.EntryPointSample;
-		int syncFactor = param.Transition.SyncFactor;
+		int syncFactor = param.SyncFactor;
 		Timing syncPointCandidateTiming = new Timing(currentTiming);
-		
-		switch( param.Transition.SyncType )
+
+		switch( param.SyncType )
 		{
 			case Music.SyncType.Immediate:
 				syncPointSample = currentSample + entryPointSample;
@@ -665,7 +781,6 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 				syncPointSample = CurrentSection.ExitPointSample;
 				if( syncPointSample <= currentSample + entryPointSample )
 				{
-					print("request and try later");
 					requenstedTransition_ = param;
 					return;
 				}
@@ -678,7 +793,6 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 					syncPointCandidateTiming.Add(syncFactor);
 					if( syncPointCandidateTiming > CurrentSection.ExitPointTiming )
 					{
-						print("request and try later");
 						requenstedTransition_ = param;
 						return;
 					}
@@ -695,7 +809,6 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 					syncPointCandidateTiming.Fix(currentMeter);
 					if( syncPointCandidateTiming > CurrentSection.ExitPointTiming )
 					{
-						print("request and try later");
 						requenstedTransition_ = param;
 						return;
 					}
@@ -713,7 +826,6 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 					syncPointCandidateTiming.Fix(currentMeter);
 					if( syncPointCandidateTiming > CurrentSection.ExitPointTiming )
 					{
-						print("request and try later");
 						requenstedTransition_ = param;
 						return;
 					}
@@ -722,9 +834,31 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 				}
 				break;
 			case Music.SyncType.Marker:
-				// not impl
-				return;
-				//break;
+				if( 0 <= syncFactor && syncFactor < CurrentSection.Markers.Length && CurrentSection.Markers[syncFactor].Timings.Length > 0 )
+				{
+					MusicSection.MusicMarker marker = CurrentSection.Markers[syncFactor];
+					int markerIndex = 0;
+					syncPointCandidateTiming.Set(marker.Timings[markerIndex]);
+
+					syncPointSample = CurrentSection.GetSampleFromTiming(syncPointCandidateTiming);
+					while( syncPointSample <= currentSample + entryPointSample )
+					{
+						++markerIndex;
+						if( marker.Timings.Length <= markerIndex )
+						{
+							requenstedTransition_ = param;
+							return;
+						}
+						syncPointCandidateTiming.Set(marker.Timings[markerIndex]);
+						syncPointSample = CurrentSection.GetSampleFromTiming(syncPointCandidateTiming);
+					}
+				}
+				else
+				{
+					print(String.Format("Failed to SetNextSection. {0} section doesn't have Marker[{1}].", CurrentSection.Name, syncFactor));
+					return;
+				}
+				break;
 		}
 
 		// 遷移状態によって前のをキャンセルしたり
@@ -750,7 +884,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		double scheduleEndTime = 0.0f;
 		if( param.Transition.UseFadeOut == false )
 		{
-			if( param.Transition.SyncType == Music.SyncType.ExitPoint )
+			if( param.SyncType == Music.SyncType.ExitPoint )
 			{
 				scheduleEndTime = AudioSettings.dspTime + (double)(musicSources_[0].clip.samples - currentSample) / GetSampleRate();
 			}
@@ -783,6 +917,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 
 		TransitionState = ETransitionState.Synced;
 		nextSectionIndex_ = param.SectionIndex;
+		requenstedTransition_ = null;
 
 		// フェード時間計算
 		transitionFadeOutVolume_ = 1.0f;
@@ -797,7 +932,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		{
 			transitionFadeInVolume_ = 0.0f;
 			transitionFadeIn_.SetFade(
-				(int)(param.Transition.FadeInOffset * GetSampleRate()), 
+				(int)(param.Transition.FadeInOffset * GetSampleRate()),
 				(int)(param.Transition.FadeInTime * GetSampleRate()));
 		}
 
@@ -819,98 +954,8 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		}
 	}
 
-	public void OnRepeated()
-	{
-	}
-
-	public void OnHorizontalSequenceChanged()
-	{
-	}
-
-
-
-	public void SetHorizontalSequence(string name)
-	{
-		for( int i = 0; i < Sections.Length; ++i )
-		{
-			if( Sections[i].Name == name )
-			{
-				SetHorizontalSequenceByIndex(i);
-				break;
-			}
-		}
-	}
-
-	public void SetHorizontalSequenceByIndex(int index)
-	{
-		if( index < 0 || Sections.Length <= index || index == nextSectionIndex_ )
-		{
-			// インデックス範囲外、もしくは既に遷移確定済み
-			return;
-		}
-
-		if( requenstedTransition_ != null && requenstedTransition_.SectionIndex == index )
-		{
-			// 既にリクエスト済み
-			return;
-		}
-
-		switch( State )
-		{
-			case EState.Invalid:
-			case EState.Finished:
-				return;
-			case EState.Ready:
-				sectionIndex_ = index;
-				ResetAudioClips();
-				return;
-			case EState.Suspended:
-				requenstedTransition_ = new TransitionRequestParam(index, this);
-				return;
-			case EState.Playing:
-				break;
-		}
-
-		// 今と同じセクションが指定されたら
-		if( index == sectionIndex_ )
-		{
-			// 予約中のはキャンセル
-			requenstedTransition_ = null;
-			// 遷移中のはキャンセルできるならキャンセル
-			if( TransitionState == ETransitionState.Synced )
-			{
-				CancelSyncedTransition();
-				OnTransitionReady();
-			}
-			else if( TransitionState == ETransitionState.PreEntry )
-			{
-				requenstedTransition_ = new TransitionRequestParam(index, this);
-			}
-			return;
-		}
-		
-		switch( TransitionState )
-		{
-			case ETransitionState.Invalid:
-				return;
-			case ETransitionState.Intro:
-			case ETransitionState.Outro:
-			case ETransitionState.PreEntry:
-			case ETransitionState.PostEntry:
-				requenstedTransition_ = new TransitionRequestParam(index, this);
-				return;
-			default:
-			//case ETransitionState.Ready:
-			//case ETransitionState.Synced:
-				break;
-		}
-
-		SetNextSection(new TransitionRequestParam(index, this));
-	}
-
-	public void SetVerticalMix(float param) { }
-
-	public void SetVerticalMixByName(string name) { }
-
 	#endregion
+
+
+
 }

@@ -11,6 +11,16 @@ public class MusicSection
 	public AudioClip[] Clips = new AudioClip[1];
 	public MusicMeter[] Meters = new MusicMeter[1] { new MusicMeter(0) };
 
+	public Music.SyncType SyncType = Music.SyncType.Bar;
+	public int SyncFactor = 1;
+	public MusicMarker[] Markers;
+
+	[Serializable]
+	public class MusicMarker
+	{
+		public Timing[] Timings;
+	}
+
 	public Timing EntryPointTiming = new Timing();
 	public Timing ExitPointTiming = new Timing();
 	public Timing LoopStartTiming = new Timing();
@@ -24,8 +34,6 @@ public class MusicSection
 		public TransitionParams() { }
 		public TransitionParams(TransitionParams other)
 		{
-			SyncType = other.SyncType;
-			SyncFactor = other.SyncFactor;
 			UseFadeOut = other.UseFadeOut;
 			FadeOutTime = other.FadeOutTime;
 			FadeOutOffset = other.FadeOutOffset;
@@ -33,9 +41,6 @@ public class MusicSection
 			FadeInTime = other.FadeInTime;
 			FadeInOffset = other.FadeInOffset;
 		}
-
-		public Music.SyncType SyncType = Music.SyncType.Bar;
-		public int SyncFactor = 1;
 
 		public bool UseFadeOut = false;
 		public float FadeOutTime;

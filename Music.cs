@@ -207,8 +207,7 @@ public class Music : MonoBehaviour
 		Music music = MusicList.Find((Music m) => m != null && m.name == musicName);
 		if( music != null )
 		{
-			music.Seek_(sequenceIndex, seekTiming);
-			Play(music);
+			music.PlayFrom_(sequenceIndex, seekTiming);
 		}
 		else
 		{
@@ -218,8 +217,7 @@ public class Music : MonoBehaviour
 
 	public static void PlayFrom(Music music, int sequenceIndex, Timing seekTiming)
 	{
-		music.Seek_(sequenceIndex, seekTiming);
-		Play(music);
+		music.PlayFrom_(sequenceIndex, seekTiming);
 	}
 
 	public static void Suspend() { Current_.musicSource_.Suspend(); }
@@ -450,6 +448,12 @@ public class Music : MonoBehaviour
 		Initialize();
 
 		musicSource_.Play();
+	}
+
+	public void PlayFrom_(int sequenceIndex, Timing seekTiming)
+	{
+		Seek_(sequenceIndex, seekTiming);
+		Play_();
 	}
 
 	public void Stop_()

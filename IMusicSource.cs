@@ -32,9 +32,7 @@ public interface IMusicSource
 	int GetSampleRate();
 
 	MusicMeter GetMeterFromSample(int currentSample);
-
-
-
+	
 	Timing GetSequenceEndTiming();
 
 	void UpdateSequenceState();
