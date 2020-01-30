@@ -163,9 +163,14 @@ public class MusicSourceADX2 : MonoBehaviour, IMusicSource
 		return Meter;
 	}
 
-	public void UpdateSequenceState()
+	public void UpdateHorizontalState()
 	{
 		currentBlockIndex_ = playback_.GetCurrentBlockIndex();
+	}
+
+	public void UpdateVerticalState()
+	{
+
 	}
 
 	public Timing GetSequenceEndTiming()
@@ -214,15 +219,17 @@ public class MusicSourceADX2 : MonoBehaviour, IMusicSource
 		}
 	}
 
-	public void SetVerticalMix(float value)
+	public void SetVerticalMixByIndex(int index)
 	{
+		/*
 		if( atomSource_ != null && AisacControlID  >= 0 )
 		{
 			atomSource_.SetAisacControl(AisacControlID, value);
 		}
+		*/
 	}
 
-	public void SetVerticalMixByName(string name)
+	public void SetVerticalMix(string name)
 	{
 		if( atomSource_ != null && string.IsNullOrEmpty(SelectorName) == false )
 		{

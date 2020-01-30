@@ -35,7 +35,9 @@ public interface IMusicSource
 	
 	Timing GetSequenceEndTiming();
 
-	void UpdateSequenceState();
+	void UpdateHorizontalState();
+
+	void UpdateVerticalState();
 
 	void OnRepeated();
 
@@ -47,8 +49,8 @@ public interface IMusicSource
 
 	void SetHorizontalSequenceByIndex(int index);
 
-	void SetVerticalMix(float param);
+	void SetVerticalMixByIndex(int index);
 
-	void SetVerticalMixByName(string name);
+	void SetVerticalMix(string name);
 
 }

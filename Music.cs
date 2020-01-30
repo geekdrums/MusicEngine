@@ -11,8 +11,6 @@ using System.Collections.Generic;
 
 public class Music : MonoBehaviour
 {
-	public TextMesh DebugText;
-
 	#region static params
 
 	static Music Current_;
@@ -32,6 +30,115 @@ public class Music : MonoBehaviour
 		Marker,
 		ExitPoint,
 	};
+
+	public enum TimeUnitType
+	{
+		Sec,
+		MSec,
+		Bar,
+		Beat,
+		Unit,
+		Sample,
+	};
+	
+	public static class TimeUtility
+	{
+		public static float DefaultBPM = 120;
+
+		public static float ConvertTime(float time, TimeUnitType from, TimeUnitType to = TimeUnitType.Sec)
+		{
+			if( from == to ) return time;
+
+			float sec = time;
+			if( from == TimeUnitType.Sec )
+			{
+				sec = time;
+			}
+			else if( from == TimeUnitType.MSec )
+			{
+				sec = time / 1000.0f;
+			}
+			else if( from == TimeUnitType.Sample )
+			{
+				sec = (float)time / Music.SampleRate;
+			}
+			else
+			{
+				if( Music.HasValidMeter )
+				{
+					switch( from )
+					{
+						case TimeUnitType.Bar:
+							sec = time * (float)Music.Meter.SecPerBar;
+							break;
+						case TimeUnitType.Beat:
+							sec = time * (float)Music.Meter.SecPerBeat;
+							break;
+						case TimeUnitType.Unit:
+							sec = time * (float)Music.Meter.SecPerUnit;
+							break;
+					}
+				}
+				else
+				{
+					switch( from )
+					{
+						case TimeUnitType.Bar:
+							sec = time * (60.0f * 4.0f / DefaultBPM);
+							break;
+						case TimeUnitType.Beat:
+							sec = time * (60.0f / DefaultBPM);
+							break;
+						case TimeUnitType.Unit:
+							sec = time * (60.0f / 4.0f / DefaultBPM);
+							break;
+					}
+				}
+			}
+
+			if( to == TimeUnitType.Sec )
+			{
+				return sec;
+			}
+			else if( to == TimeUnitType.MSec )
+			{
+				return sec * 1000.0f;
+			}
+			else if( to == TimeUnitType.Sample )
+			{
+				return sec * Music.SampleRate;
+			}
+			else
+			{
+				if( Music.HasValidMeter )
+				{
+					switch( to )
+					{
+						case TimeUnitType.Bar:
+							return sec / (float)Music.Meter.SecPerBar;
+						case TimeUnitType.Beat:
+							return sec / (float)Music.Meter.SecPerBeat;
+						case TimeUnitType.Unit:
+							return sec / (float)Music.Meter.SecPerUnit;
+					}
+				}
+				else
+				{
+					switch( to )
+					{
+						case TimeUnitType.Bar:
+							return sec / (60.0f * 4.0f / DefaultBPM);
+						case TimeUnitType.Beat:
+							return sec / (60.0f / DefaultBPM);
+						case TimeUnitType.Unit:
+							return sec / (60.0f / 4.0f / DefaultBPM);
+					}
+				}
+			}
+
+			return sec;
+		}
+	}
 
 	#endregion
 
@@ -77,6 +184,10 @@ public class Music : MonoBehaviour
 	/// </summary>
 	public static double UnitFromJust { get { return Current_.UnitFromJust_; } }
 
+	/// <summary>
+	/// returns samples per sec
+	/// </summary>
+	public static int SampleRate { get { return Current_.sampleRate_; } }
 
 	public static bool HasValidMeter { get { return Current_ != null && Current_.currentMeter_ != null; } }
 	/// <summary>
@@ -239,14 +350,14 @@ public class Music : MonoBehaviour
 		Current_.musicSource_.SetHorizontalSequenceByIndex(index);
 	}
 
-	public void SetVerticalMix(float param)
+	public void SetVerticalMix(string name)
 	{
-		Current_.musicSource_.SetVerticalMix(param);
+		Current_.musicSource_.SetVerticalMix(name);
 	}
 
-	public void SetVerticalMixByName(string name)
+	public void SetVerticalMixByIndex(int index)
 	{
-		Current_.musicSource_.SetVerticalMixByName(name);
+		Current_.musicSource_.SetVerticalMixByIndex(index);
 	}
 
 	#endregion
@@ -399,9 +510,81 @@ public class Music : MonoBehaviour
 	
 	void Update()
 	{
-		if( IsPlaying )
+		if( IsPlaying == false )
 		{
-			UpdateTiming();
+			return;
+		}
+
+		int oldSample = currentSample_;
+		oldNear_.Set(near_);
+		oldJust_.Set(just_);
+		isNearChanged_ = false;
+		isJustChanged_ = false;
+		isJustLooped_ = false;
+		isNearLooped_ = false;
+
+		int oldSequenceIndex = musicSource_.SequenceIndex;
+		musicSource_.UpdateHorizontalState();
+		musicSource_.UpdateVerticalState();
+
+		currentSample_ = musicSource_.GetCurrentSample();
+		if( currentSample_ < 0 )
+		{
+			return;
+		}
+
+		currentMeter_ = musicSource_.GetMeterFromSample(currentSample_);
+		if( currentMeter_ == null )
+		{
+			just_.Set(-1, 0, 0);
+		}
+		else
+		{
+			int meterSample = currentSample_ - currentMeter_.StartSamples;
+			int bar = (int)(meterSample / currentMeter_.SamplesPerBar);
+			int beat = (int)((meterSample - bar * currentMeter_.SamplesPerBar) / currentMeter_.SamplesPerBeat);
+			int unit = (int)(((meterSample - bar * currentMeter_.SamplesPerBar) - beat * currentMeter_.SamplesPerBeat) / currentMeter_.SamplesPerUnit);
+			just_.Set(bar + currentMeter_.StartBar, beat, unit);
+			just_.Fix(currentMeter_);
+
+			samplesFromJust_ = currentSample_ - currentMeter_.GetSampleFromTiming(just_);
+			isFormerHalf_ = samplesFromJust_ < currentMeter_.SamplesPerUnit / 2;
+
+			near_.Set(just_);
+			if( !isFormerHalf_ )
+			{
+				near_.Increment(currentMeter_);
+			}
+
+
+			if( sequenceEndTiming_ != null )
+			{
+				while( just_ >= sequenceEndTiming_ )
+				{
+					just_.Decrement(currentMeter_);
+				}
+				if( near_ >= sequenceEndTiming_ )
+				{
+					near_.Reset();
+				}
+			}
+
+			isJustChanged_ = (just_.Equals(oldJust_) == false);
+			isNearChanged_ = (near_.Equals(oldNear_) == false);
+			isJustLooped_ = isJustChanged_ && just_ < oldJust_;
+			isNearLooped_ = isNearChanged_ && near_ < oldNear_;
+
+			if( isJustLooped_ )
+			{
+				if( oldSequenceIndex != musicSource_.SequenceIndex )
+				{
+					OnHorizontalSequenceChanged();
+				}
+				else
+				{
+					OnRepeated();
+				}
+			}
 		}
 	}
 
@@ -467,91 +650,7 @@ public class Music : MonoBehaviour
 	}
 
 	#endregion
-
-
-	#region update functions
-
-	void UpdateTiming()
-	{
-		int oldSample = currentSample_;
-		oldNear_.Set(near_);
-		oldJust_.Set(just_);
-		isNearChanged_ = false;
-		isJustChanged_ = false;
-		isJustLooped_ = false;
-		isNearLooped_ = false;
-
-		int oldSequenceIndex = musicSource_.SequenceIndex;
-		musicSource_.UpdateSequenceState();
-		
-		currentSample_ = musicSource_.GetCurrentSample();
-		if( currentSample_ < 0 )
-		{
-			return;
-		}
-
-		currentMeter_ = musicSource_.GetMeterFromSample(currentSample_);
-		if( currentMeter_ == null )
-		{
-			just_.Set(-1, 0, 0);
-		}
-		else
-		{
-			int meterSample = currentSample_ - currentMeter_.StartSamples;
-			int bar = (int)(meterSample / currentMeter_.SamplesPerBar);
-			int beat = (int)((meterSample - bar * currentMeter_.SamplesPerBar) / currentMeter_.SamplesPerBeat);
-			int unit = (int)(((meterSample - bar * currentMeter_.SamplesPerBar) - beat * currentMeter_.SamplesPerBeat) / currentMeter_.SamplesPerUnit);
-			just_.Set(bar + currentMeter_.StartBar, beat, unit);
-			just_.Fix(currentMeter_);
-
-			samplesFromJust_ = currentSample_ - currentMeter_.GetSampleFromTiming(just_);
-			isFormerHalf_ = samplesFromJust_ < currentMeter_.SamplesPerUnit / 2;
-
-			near_.Set(just_);
-			if( !isFormerHalf_ )
-			{
-				near_.Increment(currentMeter_);
-			}
-
-
-			if( sequenceEndTiming_ != null )
-			{
-				while( just_ >= sequenceEndTiming_ )
-				{
-					just_.Decrement(currentMeter_);
-				}
-				if( near_ >= sequenceEndTiming_ )
-				{
-					near_.Reset();
-				}
-			}
-
-			isJustChanged_ = (just_.Equals(oldJust_) == false);
-			isNearChanged_ = (near_.Equals(oldNear_) == false);
-			isJustLooped_ = isJustChanged_ && just_ < oldJust_;
-			isNearLooped_ = isNearChanged_ && near_ < oldNear_;
-
-			if( isJustLooped_ )
-			{
-				if( oldSequenceIndex != musicSource_.SequenceIndex )
-				{
-					OnHorizontalSequenceChanged();
-				}
-				else
-				{
-					OnRepeated();
-				}
-			}
-		}
-
-
-		if( DebugText != null )
-		{
-			DebugText.text = String.Format("Just = {0}, MusicalTime = {1}", Just.ToString(), MusicalTime);
-		}
-	}
-
-	#endregion
+	
 
 
 	#region Events
@@ -575,4 +674,11 @@ public class Music : MonoBehaviour
 	}
 
 	#endregion
+
+
+
+	public override string ToString()
+	{
+		return String.Format("{0}", Just.ToString());
+	}
 }
