@@ -5,12 +5,12 @@ using UnityEngine;
 using UnityEngine.Audio;
 using UnityEngine.UI;
 
-public class MusicSourceUnity : MonoBehaviour, IMusicSource
+public class MusicUnity : Music
 {
 	#region editor params
 
 	[Range(0,1)]
-	public float Volume = 1.0f;
+	public float _Volume = 1.0f;
 	public bool _PlayOnStart;
 	public bool SeekOnPlay;
 	public int SeekSection;
@@ -182,7 +182,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 	[Serializable]
 	public class SectionTransitionParam
 	{
-		public SectionTransitionParam(int targetIndex, int currentIndex, MusicSourceUnity music)
+		public SectionTransitionParam(int targetIndex, int currentIndex, MusicUnity music)
 		{
 			SectionIndex = targetIndex;
 
@@ -205,8 +205,13 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 				SyncFactor = music.Sections[currentIndex].SyncFactor;
 				Transition = new MusicSection.TransitionParams(music.Sections[targetIndex].Transition);
 			}
+
+			if( SyncType == Music.SyncType.ExitPoint )
+			{
+				Transition.UseFadeOut = false;
+			}
 		}
-		public SectionTransitionParam(int index, MusicSourceUnity music, Music.SyncType syncType, int syncFactor = 1)
+		public SectionTransitionParam(int index, MusicUnity music, Music.SyncType syncType, int syncFactor = 1)
 		{
 			SectionIndex = index;
 			SyncType = syncType;
@@ -224,6 +229,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		public MusicSection.TransitionParams Transition;
 	}
 	private SectionTransitionParam requenstedTransition_;
+	private SectionTransitionParam executedTransition_;
 
 	// mode
 	private int numTracks_ = 0;
@@ -292,17 +298,12 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		return true;
 	}
 
-	void Awake()
+	protected override void Update()
 	{
-		if( State == EState.Invalid )
-		{
-			Initialize();
-		}
-	}
-
-	void Update()
-	{
-		UpdateNames();
+		base.Update();
+#if UNITY_EDITOR
+		UpdateGameObjectNames();
+#endif
 	}
 
 	#endregion
@@ -310,7 +311,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 
 	#region initialize
 
-	public void Initialize()
+	protected override void Initialize()
 	{
 		if( State == EState.Ready )
 		{
@@ -319,11 +320,11 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		
 		if( Validate() == true )
 		{
-			State = EState.Ready;
 			CreateAudioTrackObjects();
 			ResetAudioClips();
 			ResetModeLayerVolumes();
 			UpdateVolumes();
+			State = EState.Ready;
 		}
 	}
 
@@ -334,19 +335,17 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		transitionMusicSources_ = new AudioSource[numTracks_];
 		for( int i = 0; i < numTracks_; ++i )
 		{
-			musicSources_[i] = new GameObject("MusicTrack" + i.ToString(), typeof(AudioSource)).GetComponent<AudioSource>();
+			musicSources_[i] = new GameObject("audioSource_" + i.ToString(), typeof(AudioSource)).GetComponent<AudioSource>();
 			musicSources_[i].transform.parent = this.transform;
 			musicSources_[i].outputAudioMixerGroup = OutputMixerGroup;
-			musicSources_[i].volume = Volume;
 			musicSources_[i].playOnAwake = false;
 			musicSources_[i].loop = false;
 		}
 		for( int i = 0; i < numTracks_; ++i )
 		{
-			transitionMusicSources_[i] = new GameObject("TransitionMusicTrack" + i.ToString(), typeof(AudioSource)).GetComponent<AudioSource>();
+			transitionMusicSources_[i] = new GameObject("audioSource_t_" + i.ToString(), typeof(AudioSource)).GetComponent<AudioSource>();
 			transitionMusicSources_[i].transform.parent = this.transform;
 			transitionMusicSources_[i].outputAudioMixerGroup = OutputMixerGroup;
-			transitionMusicSources_[i].volume = Volume;
 			transitionMusicSources_[i].playOnAwake = false;
 			musicSources_[i].loop = false;
 		}
@@ -385,34 +384,37 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 
 	#region IMusicSource
 
-	public bool PlayOnStart { get { return _PlayOnStart; } }
+	public override bool PlayOnStart { get { return _PlayOnStart; } set { _PlayOnStart = value; } }
 
-	public bool IsPlaying { get { return State == EState.Playing; } }
+	public override bool IsPlaying_ { get { return State == EState.Playing; } }
 
-	public bool IsValid { get { return State != EState.Invalid; } }
+	public override float Volume { get { return _Volume; } set { _Volume = value; } }
 
-	public string SequenceName { get { return Sections[sectionIndex_].Name; } }
+	public override string SequenceName { get { return Sections[sectionIndex_].Name; } }
 
-	public int SequenceIndex { get { return sectionIndex_; } }
+	public override int SequenceIndex { get { return sectionIndex_; } }
 
 
-	public void Play()
+	public override void Play_()
 	{
 		if( State == EState.Invalid )
 		{
 			return;
 		}
+
 		if( SeekOnPlay )
 		{
 			Seek(SeekSection, SeekTiming);
 		}
+
+		base.Play_();
 
 		State = EState.Playing;
 		TransitionState = ETransitionState.Intro;
 		ModeTransitionState = EModeTransitionState.Ready;
 		UpdateVolumes();
 
-		playedDSPTime_ = MusicSourceUnity.ScheduleDSPTime;
+		playedDSPTime_ = MusicUnity.ScheduleDSPTime;
 		for( int i = 0; i < numTracks_; ++i )
 		{
 			if( musicSources_[i].clip != null )
@@ -426,7 +428,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		}
 	}
 
-	public void Stop()
+	public override void Stop_()
 	{
 		if( State == EState.Invalid )
 		{
@@ -461,7 +463,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		State = EState.Finished;
 	}
 
-	public void Suspend()
+	public override void Suspend_()
 	{
 		if( State == EState.Invalid )
 		{
@@ -483,7 +485,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		State = EState.Suspended;
 	}
 
-	public void Resume()
+	public override void Resume_()
 	{
 		if( State == EState.Invalid )
 		{
@@ -514,7 +516,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		}
 	}
 
-	public void Seek(int sequenceIndex, Timing seekTiming)
+	public override void Seek(int sequenceIndex, Timing seekTiming)
 	{
 		sectionIndex_ = sequenceIndex;
 		int seekSample = CurrentSection.GetSampleFromTiming(seekTiming);
@@ -532,22 +534,22 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		}
 	}
 
-	public double GetCurrentTimeSec()
+	protected double GetCurrentTimeSec()
 	{
-		return (double)musicSources_[0].timeSamples / GetSampleRate();
+		return (double)musicSources_[0].timeSamples / sampleRate_;
 	}
 
-	public int GetCurrentSample()
+	protected override int GetCurrentSample()
 	{
 		return musicSources_[0].timeSamples;
 	}
 
-	public int GetSampleRate()
+	protected override int GetSampleRate()
 	{
 		return musicSources_[0].clip.frequency;
 	}
 
-	public MusicMeter GetMeterFromSample(int currentSample)
+	protected override MusicMeter GetMeterFromSample(int currentSample)
 	{
 		MusicMeter res = null;
 		foreach( MusicMeter meter in CurrentSection.Meters )
@@ -561,7 +563,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		return res;
 	}
 
-	public MusicMeter GetMeterFromTiming(Timing timing)
+	protected MusicMeter GetMeterFromTiming(Timing timing)
 	{
 		MusicMeter res = null;
 		foreach( MusicMeter meter in CurrentSection.Meters )
@@ -575,12 +577,12 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		return res;
 	}
 
-	public Timing GetSequenceEndTiming()
+	protected override Timing GetSequenceEndTiming()
 	{
 		return CurrentSection.ExitPointTiming;
 	}
 
-	public void UpdateHorizontalState()
+	protected override void UpdateHorizontalState()
 	{
 		int transitionCurrentSample;
 		
@@ -629,11 +631,11 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 				break;
 			case ETransitionState.PreEntry:
 				transitionCurrentSample = transitionMusicSources_[0].timeSamples;
-				if( NextSection.Transition.UseFadeIn )
+				if( executedTransition_.Transition.UseFadeIn )
 				{
 					transitionFadeInVolume_ = transitionFadeIn_.GetVolume(transitionCurrentSample);
 				}
-				if( NextSection.Transition.UseFadeOut )
+				if( executedTransition_.Transition.UseFadeOut )
 				{
 					transitionFadeOutVolume_ = transitionFadeOut_.GetVolume(transitionCurrentSample);
 				}
@@ -647,7 +649,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 			case ETransitionState.PostEntry:
 				transitionCurrentSample = musicSources_[0].timeSamples;
 				bool isFadeInFinished = false;
-				if( CurrentSection.Transition.UseFadeIn )
+				if( executedTransition_.Transition.UseFadeIn )
 				{
 					transitionFadeInVolume_ = transitionFadeIn_.GetVolume(transitionCurrentSample);
 					isFadeInFinished = transitionFadeInVolume_ >= 1.0f;
@@ -657,7 +659,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 					isFadeInFinished = true;
 				}
 				bool isFadeOutFinished = false;
-				if( CurrentSection.Transition.UseFadeOut )
+				if( executedTransition_.Transition.UseFadeOut )
 				{
 					transitionFadeOutVolume_ = transitionFadeOut_.GetVolume(transitionCurrentSample);
 					if( transitionFadeOutVolume_ <= 0 )
@@ -694,7 +696,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		}
 	}
 
-	public void UpdateVerticalState()
+	protected override void UpdateVerticalState()
 	{
 		int currentSample = GetCurrentSample();
 
@@ -722,17 +724,9 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 			}
 		}
 	}
-
-	public void OnRepeated()
-	{
-	}
-
-	public void OnHorizontalSequenceChanged()
-	{
-	}
 	
 
-	public void SetHorizontalSequence(string name)
+	public override void SetHorizontalSequence(string name)
 	{
 		for( int i = 0; i < Sections.Length; ++i )
 		{
@@ -745,7 +739,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		print("Couldn't find section name = " + name);
 	}
 
-	public void SetHorizontalSequenceByIndex(int index)
+	public override void SetHorizontalSequenceByIndex(int index)
 	{
 		if( index < 0 || Sections.Length <= index
 			// インデックス範囲外
@@ -811,7 +805,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		SetNextSection(new SectionTransitionParam(index, sectionIndex_, this));
 	}
 
-	public void SetVerticalMix(string name)
+	public override void SetVerticalMix(string name)
 	{
 		for( int i = 0; i < Modes.Length; ++i )
 		{
@@ -824,7 +818,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		print("Couldn't find mode name = " + name);
 	}
 
-	public void SetVerticalMixByIndex(int index)
+	public override void SetVerticalMixByIndex(int index)
 	{
 		if( index < 0 || Modes.Length <= index
 			// インデックス範囲外
@@ -877,8 +871,8 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 
 	void UpdateVolumes()
 	{
-		float mainVolume = Volume * modeVolume_;
-		float transitionVolume = Volume * modeVolume_;
+		float mainVolume = _Volume * modeVolume_;
+		float transitionVolume = _Volume * modeVolume_;
 		switch( TransitionState )
 		{
 			case ETransitionState.Synced:
@@ -922,7 +916,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		}
 	}
 
-	void UpdateNames()
+	void UpdateGameObjectNames()
 	{
 		for( int i = 0; i < musicSources_.Length; ++i )
 		{
@@ -933,7 +927,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 			}
 			else
 			{
-				source.gameObject.name = "_NoTrack_";
+				source.gameObject.name = "_no track_";
 			}
 		}
 
@@ -958,7 +952,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 			}
 			else
 			{
-				transitionSource.gameObject.name = "_NoTrack_";
+				transitionSource.gameObject.name = "_no track_";
 			}
 		}
 	}
@@ -987,6 +981,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 
 	void OnTransitionReady()
 	{
+		executedTransition_ = null;
 		if( requenstedTransition_ != null )
 		{
 			SetNextSection(requenstedTransition_);
@@ -1010,7 +1005,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 
 	void SetNextLoop()
 	{
-		double loopEndTime = AudioSettings.dspTime + (double)(CurrentSection.LoopEndSample - GetCurrentSample()) / GetSampleRate();
+		double loopEndTime = AudioSettings.dspTime + (double)(CurrentSection.LoopEndSample - GetCurrentSample()) / sampleRate_;
 		for( int i = 0; i < numTracks_; ++i )
 		{
 			if( i < CurrentSection.Clips.Length )
@@ -1070,16 +1065,16 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		{
 			if( param.SyncType == Music.SyncType.ExitPoint )
 			{
-				scheduleEndTime = AudioSettings.dspTime + (double)(musicSources_[0].clip.samples - currentSample) / GetSampleRate();
+				scheduleEndTime = AudioSettings.dspTime + (double)(musicSources_[0].clip.samples - currentSample) / sampleRate_;
 			}
 			else
 			{
-				scheduleEndTime = AudioSettings.dspTime + (double)(syncPointSample - currentSample) / GetSampleRate(); ;
+				scheduleEndTime = AudioSettings.dspTime + (double)(syncPointSample - currentSample) / sampleRate_;
 			}
 		}
 
 		// 遷移波形予約
-		double transitionStartTime = AudioSettings.dspTime + (double)(syncPointSample - currentSample - entryPointSample) / GetSampleRate();
+		double transitionStartTime = AudioSettings.dspTime + (double)(syncPointSample - currentSample - entryPointSample) / sampleRate_;
 		for( int i = 0; i < numTracks_; ++i )
 		{
 			if( i < requestedSection.Clips.Length )
@@ -1103,6 +1098,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		TransitionState = ETransitionState.Synced;
 		nextSectionIndex_ = param.SectionIndex;
 		requenstedTransition_ = null;
+		executedTransition_ = param;
 
 		// フェード時間計算
 		transitionFadeOutVolume_ = 1.0f;
@@ -1110,15 +1106,15 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 		if( param.Transition.UseFadeOut )
 		{
 			transitionFadeOut_.SetFade(
-				(int)(param.Transition.FadeOutOffset * GetSampleRate()) + NextSection.EntryPointSample,
-				(int)(param.Transition.FadeOutTime * GetSampleRate()));
+				(int)(param.Transition.FadeOutOffset * sampleRate_) + NextSection.EntryPointSample,
+				(int)(param.Transition.FadeOutTime * sampleRate_));
 		}
 		if( param.Transition.UseFadeIn )
 		{
 			transitionFadeInVolume_ = 0.0f;
 			transitionFadeIn_.SetFade(
-				(int)(param.Transition.FadeInOffset * GetSampleRate()),
-				(int)(param.Transition.FadeInTime * GetSampleRate()));
+				(int)(param.Transition.FadeInOffset * sampleRate_),
+				(int)(param.Transition.FadeInTime * sampleRate_));
 		}
 
 		UpdateVolumes();
@@ -1228,7 +1224,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 			}
 			if( musicSources_[i].clip != null )
 			{
-				musicSources_[i].SetScheduledEndTime(AudioSettings.dspTime + (double)(musicSources_[i].clip.samples - GetCurrentSample()) / GetSampleRate());
+				musicSources_[i].SetScheduledEndTime(AudioSettings.dspTime + (double)(musicSources_[i].clip.samples - GetCurrentSample()) / sampleRate_);
 			}
 		}
 	}
@@ -1260,7 +1256,7 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 
 		// 遷移タイミング計算
 		int currentSample = GetCurrentSample();
-		int entryPointSample = Math.Max((int)(-param.FadeOffsetSec * GetSampleRate()), 0);
+		int entryPointSample = Math.Max((int)(-param.FadeOffsetSec * sampleRate_), 0);
 		int syncPointSample = 0;
 		if( FindSyncPoint(param.SyncType, param.SyncFactor, currentSample, entryPointSample, out syncPointSample) == false )
 		{
@@ -1289,8 +1285,8 @@ public class MusicSourceUnity : MonoBehaviour, IMusicSource
 
 		// フェード時間計算
 		modeFade_.SetFade(
-			Math.Max(currentSample, syncPointSample + (int)(param.FadeOffsetSec * GetSampleRate())),
-			(int)(param.FadeTimeSec * GetSampleRate()));
+			Math.Max(currentSample, syncPointSample + (int)(param.FadeOffsetSec * sampleRate_)),
+			(int)(param.FadeTimeSec * sampleRate_));
 
 		UpdateVolumes();
 	}
