@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 // http://light11.hatenadiary.com/entry/2018/08/04/195629
 [CustomPropertyDrawer(typeof(Timing))]
-public class PostalCodeDrawer : PropertyDrawer
+public class TimingPropertyDrawer : PropertyDrawer
 {
 	private class PropertyData
 	{

@@ -6,13 +6,14 @@ using System.Collections.Generic;
 [Serializable]
 public class MusicMeter
 {
-	public int UnitPerBeat;
-	public int UnitPerBar;
-	public double Tempo;
-	public int StartBar;
+	public int StartBar = 0;
+	public double Tempo = 120.0f;
+	public int UnitPerBeat = 4;
+	public int UnitPerBar = 16;
+	public int Numerator = 4;
+	public int Denominator = 4;
 
 	public int StartSamples { get; private set; }
-
 	public int SamplesPerUnit { get; private set; }
 	public int SamplesPerBeat { get; private set; }
 	public int SamplesPerBar { get; private set; }
@@ -23,9 +24,40 @@ public class MusicMeter
 	public MusicMeter(int startBar, int unitPerBeat = 4, int unitPerBar = 16, double tempo = 120)
 	{
 		StartBar = startBar;
+		Tempo = tempo;
+
 		UnitPerBeat = unitPerBeat;
 		UnitPerBar = unitPerBar;
-		Tempo = tempo;
+
+		CalcMeterByUnits(UnitPerBeat, UnitPerBar, out Numerator, out Denominator);
+	}
+
+	public static void CalcMeterByUnits(int unitPerBeat, int unitPerBar, out int numerator, out int denominator)
+	{
+		if( unitPerBar % unitPerBeat == 0 )
+		{
+			denominator = unitPerBeat == 2 ? 8 : 4;
+			numerator = unitPerBar / unitPerBeat;
+		}
+		else
+		{
+			int commonDividor = Euclid(unitPerBar, unitPerBeat * 4);
+			numerator = unitPerBar / commonDividor;
+			denominator = unitPerBeat * 4 / commonDividor;
+		}
+	}
+
+	public static void CalcMeterByFraction(int numerator, int denominator, out int unitPerBeat, out int unitPerBar)
+	{
+		unitPerBeat = 4 * Mathf.Max(1, (denominator / 16));
+		unitPerBar = numerator * ((unitPerBeat * 4) / denominator);
+	}
+
+	public static int Euclid(int small, int big)
+	{
+		if( big % small == 0 )
+			return small;
+		return Euclid(big % small, small);
 	}
 
 	public void OnValidate(int samplingRate = 44100, int startTimeSample = 0)
@@ -71,6 +103,6 @@ public class MusicMeter
 	
 	public override string ToString()
 	{
-		return string.Format("StartBar:{0}, Tempo:{1}", StartBar, Tempo);
+		return string.Format("({0}/{1}, {2:F2})", Numerator, Denominator, Tempo);
 	}
 }

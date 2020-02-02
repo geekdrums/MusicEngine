@@ -51,13 +51,13 @@ public class MusicSection
 		public float FadeInOffset;
 	}
 
-	public enum ETransitionType
+	public enum AutoTransitionType
 	{
 		Loop,
 		Transition,
 		End,
 	}
-	public ETransitionType TransitionType;
+	public AutoTransitionType TransitionType;
 	public int TransitionDestinationIndex;
 
 	public bool IsValid { get; private set; }
@@ -65,8 +65,9 @@ public class MusicSection
 	public int LoopEndSample { get; private set; }
 	public int EntryPointSample { get; private set; }
 	public int ExitPointSample { get; private set; }
+	public Timing ClipEndTiming { get; private set; }
 
-	public void Initialize()
+	public void Validate()
 	{
 		IsValid = false;
 		if( Clips.Length == 0 || Clips[0] == null || Meters.Length == 0 )
@@ -91,20 +92,20 @@ public class MusicSection
 			lastMeter = meter;
 		}
 
-		Timing clipEndTiming = lastMeter.GetTimingFromSample(Clips[0].samples);
+		ClipEndTiming = lastMeter.GetTimingFromSample(Clips[0].samples);
 		// 波形終わりのタイミングを参考にExitPointを設定する
-		if( ExitPointTiming <= EntryPointTiming || clipEndTiming < ExitPointTiming )
+		if( ExitPointTiming <= EntryPointTiming || ClipEndTiming < ExitPointTiming )
 		{
-			ExitPointTiming = new Timing(clipEndTiming);
+			ExitPointTiming = new Timing(ClipEndTiming);
 			ExitPointTiming.FixToFloor();
 		}
-		if( clipEndTiming < LoopEndTiming )
+		if( ClipEndTiming < LoopEndTiming )
 		{
-			LoopEndTiming = new Timing(clipEndTiming);
+			LoopEndTiming = new Timing(ClipEndTiming);
 			LoopEndTiming.FixToFloor();
 		}
 
-		if( TransitionType == ETransitionType.Loop )
+		if( TransitionType == AutoTransitionType.Loop )
 		{
 			// LoopEndはLoopStartより後じゃないとダメ
 			if( LoopStartTiming >= LoopEndTiming )

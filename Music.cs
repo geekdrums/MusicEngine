@@ -21,6 +21,15 @@ public abstract class Music : MonoBehaviour
 	protected static HorizontalSequenceEvent OnRepeatedEvent;
 	protected static readonly float PITCH_UNIT = Mathf.Pow(2.0f, 1.0f / 12.0f);
 
+	public enum PlayState
+	{
+		Invalid,
+		Ready,
+		Playing,
+		Suspended,
+		Finished
+	};
+
 	public enum SyncType
 	{
 		Immediate,
@@ -143,7 +152,7 @@ public abstract class Music : MonoBehaviour
 	#endregion
 
 
-	#region public static properties
+	#region static properties
 
 	public static Music Current { get { return Current_; } }
 
@@ -237,7 +246,7 @@ public abstract class Music : MonoBehaviour
 	#endregion
 
 
-	#region public static predicates
+	#region static predicates
 
 	public static bool IsJustChangedWhen(Predicate<Timing> pred)
 	{
@@ -284,7 +293,7 @@ public abstract class Music : MonoBehaviour
 	#endregion
 
 
-	#region public static functions
+	#region static functions
 
 	/// <summary>
 	/// Change Current Music.
@@ -356,6 +365,7 @@ public abstract class Music : MonoBehaviour
 		samplesFromJust_ = 0;
 		isFormerHalf_ = true;
 		numRepeat_ = 0;
+		sequenceEndTiming_ = GetSequenceEndTiming();
 	}
 
 	public virtual void Play_()
@@ -404,6 +414,8 @@ public abstract class Music : MonoBehaviour
 
 	protected abstract Timing GetSequenceEndTiming();
 
+	protected abstract void UpdatePlayState();
+
 	protected abstract void UpdateHorizontalState();
 
 	protected abstract void UpdateVerticalState();
@@ -411,7 +423,7 @@ public abstract class Music : MonoBehaviour
 	#endregion
 
 
-	#region protected params
+	#region params
 
 	// 現在再生中の箇所のメーター情報。
 	protected MusicMeter currentMeter_;
@@ -449,7 +461,7 @@ public abstract class Music : MonoBehaviour
 	#endregion
 
 
-	#region protected properties
+	#region properties
 
 	protected double SecFromJust_
 	{
@@ -472,7 +484,7 @@ public abstract class Music : MonoBehaviour
 	#endregion
 
 
-	#region protected predicates
+	#region predicates
 
 	protected bool IsNearChangedWhen_(Predicate<Timing> pred)
 	{
@@ -554,6 +566,8 @@ public abstract class Music : MonoBehaviour
 
 	protected virtual void Update()
 	{
+		UpdatePlayState();
+
 		if( IsPlaying == false )
 		{
 			return;
@@ -596,6 +610,11 @@ public abstract class Music : MonoBehaviour
 			just_.Set(bar + currentMeter_.StartBar, beat, unit);
 			just_.Fix(currentMeter_);
 
+			while( sequenceEndTiming_ != null && just_ >= sequenceEndTiming_ )
+			{
+				just_.Decrement(currentMeter_);
+			}
+
 			samplesFromJust_ = currentSample_ - currentMeter_.GetSampleFromTiming(just_);
 			isFormerHalf_ = samplesFromJust_ < currentMeter_.SamplesPerUnit / 2;
 
@@ -604,18 +623,9 @@ public abstract class Music : MonoBehaviour
 			{
 				near_.Increment(currentMeter_);
 			}
-
-
-			if( sequenceEndTiming_ != null )
+			if( sequenceEndTiming_ != null && near_ >= sequenceEndTiming_ )
 			{
-				while( just_ >= sequenceEndTiming_ )
-				{
-					just_.Decrement(currentMeter_);
-				}
-				if( near_ >= sequenceEndTiming_ )
-				{
-					near_.Reset();
-				}
+				near_.Reset();
 			}
 
 			isJustChanged_ = (just_.Equals(oldJust_) == false);
@@ -657,7 +667,7 @@ public abstract class Music : MonoBehaviour
 	#endregion
 	
 
-	#region Events
+	#region events
 
 	protected virtual void OnRepeated()
 	{
