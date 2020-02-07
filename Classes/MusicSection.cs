@@ -76,7 +76,8 @@ public class MusicSection
 		}
 
 		// 最初のメーターをValidateして、EntryPointのサンプル数を計算
-		Meters[0].OnValidate(Clips[0].frequency, 0);
+		int samplingRate = Clips[0].frequency;
+		Meters[0].OnValidate(samplingRate, 0);
 		EntryPointSample = Meters[0].GetSampleFromTiming(EntryPointTiming);
 
 		// 後続のメーターすべてをValidate
@@ -88,7 +89,7 @@ public class MusicSection
 			{
 				startSample += lastMeter.SamplesPerBar * meter.StartBar;
 			}
-			meter.OnValidate(Clips[0].frequency, startSample);
+			meter.OnValidate(samplingRate, startSample);
 			lastMeter = meter;
 		}
 

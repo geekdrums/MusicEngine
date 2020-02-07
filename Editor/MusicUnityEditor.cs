@@ -42,13 +42,13 @@ public class MusicUnityEditor : Editor
 		sectionTransitionOverridesListProperty_ = serializedObject.FindProperty("SectionTransitionOverrides");
 		modeTransitionOverridesListProperty_ = serializedObject.FindProperty("ModeTransitionOverrides");
 
-		volumeProperty_ = serializedObject.FindProperty("_Volume");
-		playOnStartProperty_ = serializedObject.FindProperty("_PlayOnStart");
+		volumeProperty_ = serializedObject.FindProperty("Volume");
+		playOnStartProperty_ = serializedObject.FindProperty("PlayOnStart");
 		mixerGroupProperty_ = serializedObject.FindProperty("OutputMixerGroup");
 		seekBarProperty_ = serializedObject.FindProperty("SeekBar");
 		previewSectionProperty_ = serializedObject.FindProperty("PreviewSectionIndex");
 		previewModeProperty_ = serializedObject.FindProperty("PreviewModeIndex");
-		numTracksProperty_ = serializedObject.FindProperty("_NumTracks");
+		numTracksProperty_ = serializedObject.FindProperty("NumTracks");
 	}
 
 	public override void OnInspectorGUI()
@@ -193,27 +193,27 @@ public class MusicUnityEditor : Editor
 			{
 				if( GUILayout.Button("Play") )
 				{
-					if( music.IsPlaying_ == false )
+					if( music.IsPlaying == false )
 					{
-						music.Play_();
+						music.Play();
 					}
 				}
-				if( GUILayout.Button(music.State == MusicUnity.PlayState.Suspended ? "Resume" : "Suspend") )
+				if( GUILayout.Button(music.State == Music.PlayState.Suspended ? "Resume" : "Suspend") )
 				{
-					if( music.State == MusicUnity.PlayState.Suspended )
+					if( music.State == Music.PlayState.Suspended )
 					{
-						music.Resume_();
+						music.Resume();
 					}
 					else
 					{
-						music.Suspend_();
+						music.Suspend();
 					}
 				}
 				if( GUILayout.Button("Stop") )
 				{
-					if( music.IsPlaying_ || music.State == Music.PlayState.Suspended )
+					if( music.IsPlaying || music.State == Music.PlayState.Suspended )
 					{
-						music.Stop_();
+						music.Stop();
 					}
 				}
 			}
@@ -245,7 +245,7 @@ public class MusicUnityEditor : Editor
 				}
 				EditorGUILayout.EndHorizontal();
 
-				EditorGUILayout.Slider("Seek Bar", Music.MusicalTime, music.CurrentSection.EntryPointTiming.IsZero() ? 0 : -1, music.CurrentSection.ExitPointTiming.Bar);
+				EditorGUILayout.Slider("Seek Bar", music.MusicalTime, music.CurrentSection.EntryPointTiming.IsZero() ? 0 : -1, music.CurrentSection.ExitPointTiming.Bar);
 				EditorUtility.SetDirty(serializedObject.targetObject);
 			}
 			else

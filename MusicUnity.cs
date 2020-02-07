@@ -3,19 +3,19 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
-using UnityEngine.UI;
 
-public class MusicUnity : Music
+public class MusicUnity : MusicBase
 {
 	#region editor params
 
 	[Range(0,1)]
-	public float _Volume = 1.0f;
-	public bool _PlayOnStart;
+	public float Volume = 1.0f;
 	public AudioMixerGroup OutputMixerGroup;
+
 	public MusicSection[] Sections = new MusicSection[1] { new MusicSection() };
 	public MusicMode[] Modes = new MusicMode[1] { new MusicMode() };
 	public MusicMode.TransitionParams ModeTransitionParam;
+
 	[Serializable]
 	public class SectionTransitionOverride
 	{
@@ -26,6 +26,7 @@ public class MusicUnity : Music
 		public MusicSection.TransitionParams Transition;
 	}
 	public List<SectionTransitionOverride> SectionTransitionOverrides;
+
 	[Serializable]
 	public class ModeTransitionOverride
 	{
@@ -34,7 +35,7 @@ public class MusicUnity : Music
 		public MusicMode.TransitionParams Transition;
 	}
 	public List<ModeTransitionOverride> ModeTransitionOverrides;
-	public int _NumTracks = 1;
+	public int NumTracks = 1;
 
 	#if UNITY_EDITOR
 	public int SeekBar = -1;
@@ -48,7 +49,6 @@ public class MusicUnity : Music
 	#region properties
 
 	// states
-	public PlayState State { get; private set; } = PlayState.Invalid;
 	public enum ETransitionState
 	{
 		Invalid = 0,
@@ -72,6 +72,8 @@ public class MusicUnity : Music
 	// section property
 	public int SectionIndex { get { return sectionIndex_; } }
 	public int NextSectionIndex { get { return nextSectionIndex_; } }
+	public override int SequenceIndex { get { return sectionIndex_; } }
+	public override string SequenceName { get { return Sections[sectionIndex_].Name; } }
 	public MusicSection CurrentSection { get { return Sections[sectionIndex_]; } }
 	public MusicSection NextSection { get { return Sections[nextSectionIndex_]; } }
 	public MusicSection PrevSection { get { return Sections[prevSectionIndex_]; } }
@@ -255,311 +257,28 @@ public class MusicUnity : Music
 	#endregion
 
 
-	#region unity functions
+	#region override functions
 
-	void OnValidate()
+	// internal
+
+	protected override bool ReadyInternal()
 	{
-		Validate();
-	}
-
-	bool Validate()
-	{
-		if( Sections.Length == 0 )
+		if( Validate() )
 		{
-			return false;
-		}
-		if( _NumTracks < 1 )
-		{
-			_NumTracks = 1;
-		}
-		foreach( MusicSection section in Sections )
-		{
-			section.Validate();
-			if( section.IsValid == false )
-			{
-				return false;
-			}
-		}
-
-		if( Modes.Length == 0 )
-		{
-			Modes = new MusicMode[1] { new MusicMode() };
-		}
-		foreach( MusicMode mode in Modes )
-		{
-			for( int i = mode.LayerVolumes.Count; i < _NumTracks; ++i )
-			{
-				mode.LayerVolumes.Add(1.0f);
-			}
-			for( int i = _NumTracks; i < mode.LayerVolumes.Count; ++i )
-			{
-				mode.LayerVolumes.RemoveAt(i);
-			}
-		}
-
-		return true;
-	}
-
-	protected override void Update()
-	{
-		base.Update();
-#if UNITY_EDITOR
-		UpdateGameObjectNames();
-#endif
-	}
-
-	#endregion
-
-
-	#region initialize
-
-	protected override void Initialize()
-	{
-		if( State == PlayState.Ready )
-		{
-			return;
-		}
-		
-		if( Validate() == true )
-		{
-			CreateAudioTrackObjects();
-			ResetAudioClips();
+			InstantiateAudioSourceObjects();
+			ResetSectionClips();
 			ResetModeLayerVolumes();
 			UpdateVolumes();
-			State = PlayState.Ready;
+			return true;
 		}
+		return false;
 	}
 
-	void CreateAudioTrackObjects()
-	{
-		// AudioSourceを最大トラック数*2（遷移時に重なる分）まで生成。
-		musicSources_ = new AudioSource[_NumTracks];
-		transitionMusicSources_ = new AudioSource[_NumTracks];
-		for( int i = 0; i < _NumTracks; ++i )
-		{
-			musicSources_[i] = new GameObject("audioSource_" + i.ToString(), typeof(AudioSource)).GetComponent<AudioSource>();
-			musicSources_[i].transform.parent = this.transform;
-			musicSources_[i].outputAudioMixerGroup = OutputMixerGroup;
-			musicSources_[i].playOnAwake = false;
-			musicSources_[i].loop = false;
-		}
-		for( int i = 0; i < _NumTracks; ++i )
-		{
-			transitionMusicSources_[i] = new GameObject("audioSource_t_" + i.ToString(), typeof(AudioSource)).GetComponent<AudioSource>();
-			transitionMusicSources_[i].transform.parent = this.transform;
-			transitionMusicSources_[i].outputAudioMixerGroup = OutputMixerGroup;
-			transitionMusicSources_[i].playOnAwake = false;
-			musicSources_[i].loop = false;
-		}
-	}
-
-	void ResetAudioClips()
-	{
-		for( int i = 0; i < _NumTracks; ++i )
-		{
-			if( i < CurrentSection.Clips.Length )
-			{
-				musicSources_[i].clip = CurrentSection.Clips[i];
-				musicSources_[i].timeSamples = 0;
-			}
-			else
-			{
-				musicSources_[i].clip = null;
-			}
-			transitionMusicSources_[i].clip = null;
-		}
-	}
-
-	void ResetModeLayerVolumes()
-	{
-		modeLayerVolumes_.Clear();
-		modeLayerBaseVolumes_.Clear();
-		for( int i = 0; i < _NumTracks; ++i )
-		{
-			modeLayerVolumes_.Add(CurrentMode.LayerVolumes[i]);
-			modeLayerBaseVolumes_.Add(CurrentMode.LayerVolumes[i]);
-		}
-		modeVolume_ = CurrentMode.TotalVolume;
-	}
-
-	#endregion
-
-
-	#region overrides
-
-	public override bool PlayOnStart { get { return _PlayOnStart; } set { _PlayOnStart = value; } }
-
-	public override bool IsPlaying_ { get { return State == PlayState.Playing; } }
-
-	public override float Volume { get { return _Volume; } set { _Volume = value; } }
-
-	public override string SequenceName { get { return Sections[sectionIndex_].Name; } }
-
-	public override int SequenceIndex { get { return sectionIndex_; } }
-
-
-	public override void Play_()
-	{
-		if( State == PlayState.Playing || State == PlayState.Suspended || State == PlayState.Invalid )
-		{
-			return;
-		}
-
-#if UNITY_EDITOR
-		if( PreviewSectionIndex != sectionIndex_ || SeekBar >= 0 )
-		{
-			Seek(PreviewSectionIndex, new Timing(SeekBar));
-		}
-		if( PreviewModeIndex != modeIndex_ )
-		{
-			modeIndex_ = nextModeIndex_ = PreviewModeIndex;
-			ResetModeLayerVolumes();
-		}
-#endif
-
-		base.Play_();
-
-		State = PlayState.Playing;
-		TransitionState = ETransitionState.Intro;
-		ModeTransitionState = EModeTransitionState.Ready;
-		UpdateVolumes();
-
-		playedDSPTime_ = MusicUnity.ScheduleDSPTime;
-		for( int i = 0; i < _NumTracks; ++i )
-		{
-			if( musicSources_[i].clip != null )
-			{
-				musicSources_[i].PlayScheduled(playedDSPTime_);
-			}
-			else
-			{
-				break;
-			}
-		}
-	}
-
-	public override void Stop_()
-	{
-		if( State == PlayState.Invalid )
-		{
-			return;
-		}
-
-		for( int i = 0; i < _NumTracks; ++i )
-		{
-			if( musicSources_[i].clip != null )
-			{
-				musicSources_[i].Stop();
-				musicSources_[i].clip = null;
-			}
-			if( transitionMusicSources_[i].clip != null )
-			{
-				transitionMusicSources_[i].Stop();
-				transitionMusicSources_[i].clip = null;
-			}
-		}
-
-		sectionIndex_ = 0;
-		nextSectionIndex_ = -1;
-		prevSectionIndex_ = -1;
-		requenstedTransition_ = null;
-		modeIndex_ = 0;
-		nextModeIndex_ = 0;
-		requestedModeIndex_ = -1;
-		endScheduledDSPTime_ = 0.0;
-		syncScheduledDSPTime_ = 0.0;
-		ResetAudioClips();
-		ResetModeLayerVolumes();
-
-		ModeTransitionState = EModeTransitionState.Invalid;
-		TransitionState = ETransitionState.Invalid;
-		State = PlayState.Finished;
-	}
-
-	public override void Suspend_()
-	{
-		if( State != PlayState.Playing )
-		{
-			return;
-		}
-
-		for( int i = 0; i < _NumTracks; ++i )
-		{
-			if( musicSources_[i].clip != null )
-			{
-				musicSources_[i].Pause();
-			}
-			if( transitionMusicSources_[i].clip != null )
-			{
-				transitionMusicSources_[i].Pause();
-			}
-		}
-
-		suspendedDSPTime_ = AudioSettings.dspTime;
-
-		State = PlayState.Suspended;
-	}
-
-	public override void Resume_()
-	{
-		if( State != PlayState.Suspended )
-		{
-			return;
-		}
-
-		double suspendedDuration = AudioSettings.dspTime - suspendedDSPTime_;
-		if( TransitionState == ETransitionState.Synced && syncScheduledDSPTime_ > 0.0 )
-		{
-			syncScheduledDSPTime_ += suspendedDuration;
-			for( int i = 0; i < _NumTracks; ++i )
-			{
-				if( transitionMusicSources_[i].clip != null )
-				{
-					transitionMusicSources_[i].SetScheduledStartTime(syncScheduledDSPTime_);
-				}
-			}
-		}
-		if( endScheduledDSPTime_ > 0.0 )
-		{
-			endScheduledDSPTime_ += suspendedDuration;
-			for( int i = 0; i < _NumTracks; ++i )
-			{
-				if( musicSources_[i].clip != null )
-				{
-					musicSources_[i].SetScheduledEndTime(endScheduledDSPTime_);
-				}
-			}
-		}
-
-		for( int i = 0; i < _NumTracks; ++i )
-		{
-			if( musicSources_[i].clip != null )
-			{
-				musicSources_[i].UnPause();
-			}
-			if( transitionMusicSources_[i].clip != null )
-			{
-				transitionMusicSources_[i].UnPause();
-			}
-		}
-
-		State = PlayState.Playing;
-
-		if( requenstedTransition_ != null )
-		{
-			SetNextSection(requenstedTransition_);
-		}
-		if( requestedModeIndex_ >= 0 )
-		{
-			SetMode(requestedModeIndex_);
-		}
-	}
-
-	public override void Seek(int sequenceIndex, Timing seekTiming)
+	protected override void SeekInternal(int sequenceIndex, Timing seekTiming)
 	{
 		sectionIndex_ = sequenceIndex;
 		int seekSample = CurrentSection.GetSampleFromTiming(seekTiming);
-		for( int i = 0; i < _NumTracks; ++i )
+		for( int i = 0; i < NumTracks; ++i )
 		{
 			if( i < CurrentSection.Clips.Length )
 			{
@@ -573,10 +292,145 @@ public class MusicUnity : Music
 		}
 	}
 
-	protected double GetCurrentTimeSec()
+	protected override bool PlayInternal()
 	{
-		return (double)musicSources_[0].timeSamples / sampleRate_;
+		#if UNITY_EDITOR
+		if( PreviewSectionIndex != sectionIndex_ || SeekBar >= 0 )
+		{
+			SeekInternal(PreviewSectionIndex, new Timing(SeekBar));
+		}
+		if( PreviewModeIndex != modeIndex_ )
+		{
+			modeIndex_ = nextModeIndex_ = PreviewModeIndex;
+			ResetModeLayerVolumes();
+		}
+		#endif
+		
+		TransitionState = ETransitionState.Intro;
+		ModeTransitionState = EModeTransitionState.Ready;
+		UpdateVolumes();
+
+		playedDSPTime_ = MusicUnity.ScheduleDSPTime;
+		for( int i = 0; i < NumTracks; ++i )
+		{
+			if( musicSources_[i].clip != null )
+			{
+				musicSources_[i].PlayScheduled(playedDSPTime_);
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		return true;
 	}
+
+	protected override bool SuspendInternal()
+	{
+		for( int i = 0; i < NumTracks; ++i )
+		{
+			if( musicSources_[i].clip != null )
+			{
+				musicSources_[i].Pause();
+			}
+			if( transitionMusicSources_[i].clip != null )
+			{
+				transitionMusicSources_[i].Pause();
+			}
+		}
+
+		suspendedDSPTime_ = AudioSettings.dspTime;
+		return true;
+	}
+
+	protected override bool ResumeInternal()
+	{
+		double suspendedDuration = AudioSettings.dspTime - suspendedDSPTime_;
+		if( TransitionState == ETransitionState.Synced && syncScheduledDSPTime_ > 0.0 )
+		{
+			syncScheduledDSPTime_ += suspendedDuration;
+			for( int i = 0; i < NumTracks; ++i )
+			{
+				if( transitionMusicSources_[i].clip != null )
+				{
+					transitionMusicSources_[i].SetScheduledStartTime(syncScheduledDSPTime_);
+				}
+			}
+		}
+		if( endScheduledDSPTime_ > 0.0 )
+		{
+			endScheduledDSPTime_ += suspendedDuration;
+			for( int i = 0; i < NumTracks; ++i )
+			{
+				if( musicSources_[i].clip != null )
+				{
+					musicSources_[i].SetScheduledEndTime(endScheduledDSPTime_);
+				}
+			}
+		}
+
+		for( int i = 0; i < NumTracks; ++i )
+		{
+			if( musicSources_[i].clip != null )
+			{
+				musicSources_[i].UnPause();
+			}
+			if( transitionMusicSources_[i].clip != null )
+			{
+				transitionMusicSources_[i].UnPause();
+			}
+		}
+
+		if( requenstedTransition_ != null )
+		{
+			SetNextSection(requenstedTransition_);
+		}
+		if( requestedModeIndex_ >= 0 )
+		{
+			SetMode(requestedModeIndex_);
+		}
+		return true;
+	}
+
+	protected override bool StopInternal()
+	{
+		for( int i = 0; i < NumTracks; ++i )
+		{
+			if( musicSources_[i].clip != null )
+			{
+				musicSources_[i].Stop();
+				musicSources_[i].clip = null;
+			}
+			if( transitionMusicSources_[i].clip != null )
+			{
+				transitionMusicSources_[i].Stop();
+				transitionMusicSources_[i].clip = null;
+			}
+		}
+
+		ResetSectionClips();
+		ResetModeLayerVolumes();
+
+		ModeTransitionState = EModeTransitionState.Invalid;
+		TransitionState = ETransitionState.Invalid;
+		return true;
+	}
+
+	protected override void ResetParamsInternal()
+	{
+		sectionIndex_ = 0;
+		nextSectionIndex_ = -1;
+		prevSectionIndex_ = -1;
+		requenstedTransition_ = null;
+		modeIndex_ = 0;
+		nextModeIndex_ = 0;
+		requestedModeIndex_ = -1;
+		endScheduledDSPTime_ = 0.0;
+		syncScheduledDSPTime_ = 0.0;
+	}
+	
+	// timing
 
 	protected override int GetCurrentSample()
 	{
@@ -585,7 +439,7 @@ public class MusicUnity : Music
 
 	protected override int GetSampleRate()
 	{
-		return musicSources_[0].clip.frequency;
+		return Sections[0].Clips[0].frequency;
 	}
 
 	protected override MusicMeter GetMeterFromSample(int currentSample)
@@ -602,28 +456,16 @@ public class MusicUnity : Music
 		return res;
 	}
 
-	protected MusicMeter GetMeterFromTiming(Timing timing)
-	{
-		MusicMeter res = null;
-		foreach( MusicMeter meter in CurrentSection.Meters )
-		{
-			if( timing.Bar < meter.StartBar )
-			{
-				return res;
-			}
-			res = meter;
-		}
-		return res;
-	}
-
 	protected override Timing GetSequenceEndTiming()
 	{
 		return CurrentSection.ExitPointTiming;
 	}
-
-	protected override void UpdatePlayState()
+	
+	// update
+	
+	protected override bool CheckFinishPlaying()
 	{
-		if( IsPlaying_ && nextSectionIndex_ == -1 )
+		if( nextSectionIndex_ == -1 ) // will end
 		{
 			bool isSomeSourcePlaying = false;
 			foreach( AudioSource source in musicSources_ )
@@ -637,9 +479,17 @@ public class MusicUnity : Music
 
 			if( isSomeSourcePlaying == false )
 			{
-				Stop_();
+				return true;
 			}
 		}
+		return false;
+	}
+
+	protected override void UpdateInternal()
+	{
+		#if UNITY_EDITOR
+		UpdateGameObjectNames();
+		#endif
 	}
 
 	protected override void UpdateHorizontalState()
@@ -772,7 +622,7 @@ public class MusicUnity : Music
 		{
 			float fade = modeFade_.GetVolume(currentSample);
 			modeVolume_ = modeBaseVolume_ + (NextMode.TotalVolume - modeBaseVolume_) * fade;
-			for( int i = 0; i < _NumTracks; ++i )
+			for( int i = 0; i < NumTracks; ++i )
 			{
 				modeLayerVolumes_[i] = modeLayerBaseVolumes_[i] + (NextMode.LayerVolumes[i] - modeLayerBaseVolumes_[i]) * fade;
 			}
@@ -785,6 +635,7 @@ public class MusicUnity : Music
 		}
 	}
 	
+	// interactive music
 
 	public override void SetHorizontalSequence(string name)
 	{
@@ -814,17 +665,17 @@ public class MusicUnity : Music
 		// 再生中以外は設定だけ
 		switch( State )
 		{
-			case PlayState.Invalid:
+			case Music.PlayState.Invalid:
 				return;
-			case PlayState.Ready:
-			case PlayState.Finished:
+			case Music.PlayState.Ready:
+			case Music.PlayState.Finished:
 				sectionIndex_ = index;
-				ResetAudioClips();
+				ResetSectionClips();
 				return;
-			case PlayState.Suspended:
+			case Music.PlayState.Suspended:
 				requenstedTransition_ = new SectionTransitionParam(index, sectionIndex_, this);
 				return;
-			case PlayState.Playing:
+			case Music.PlayState.Playing:
 				break;
 		}
 
@@ -893,18 +744,18 @@ public class MusicUnity : Music
 		// 再生中以外は設定だけ
 		switch( State )
 		{
-			case PlayState.Invalid:
+			case Music.PlayState.Invalid:
 				return;
-			case PlayState.Ready:
-			case PlayState.Finished:
+			case Music.PlayState.Ready:
+			case Music.PlayState.Finished:
 				modeIndex_ = index;
 				nextModeIndex_ = index;
 				ResetModeLayerVolumes();
 				return;
-			case PlayState.Suspended:
+			case Music.PlayState.Suspended:
 				requestedModeIndex_ = index;
 				return;
-			case PlayState.Playing:
+			case Music.PlayState.Playing:
 				break;
 		}
 
@@ -928,12 +779,111 @@ public class MusicUnity : Music
 	#endregion
 
 
-	#region transition
+	#region private functions
+
+	// initialize
+
+	void OnValidate()
+	{
+		Validate();
+	}
+
+	bool Validate()
+	{
+		if( Sections.Length == 0 )
+		{
+			return false;
+		}
+		if( NumTracks < 1 )
+		{
+			NumTracks = 1;
+		}
+		foreach( MusicSection section in Sections )
+		{
+			section.Validate();
+			if( section.IsValid == false )
+			{
+				return false;
+			}
+		}
+
+		if( Modes.Length == 0 )
+		{
+			Modes = new MusicMode[1] { new MusicMode() };
+		}
+		foreach( MusicMode mode in Modes )
+		{
+			for( int i = mode.LayerVolumes.Count; i < NumTracks; ++i )
+			{
+				mode.LayerVolumes.Add(1.0f);
+			}
+			for( int i = NumTracks; i < mode.LayerVolumes.Count; ++i )
+			{
+				mode.LayerVolumes.RemoveAt(i);
+			}
+		}
+
+		return true;
+	}
+
+	void InstantiateAudioSourceObjects()
+	{
+		// AudioSourceを最大トラック数*2（遷移時に重なる分）まで生成。
+		musicSources_ = new AudioSource[NumTracks];
+		transitionMusicSources_ = new AudioSource[NumTracks];
+		for( int i = 0; i < NumTracks; ++i )
+		{
+			musicSources_[i] = new GameObject("audioSource_" + i.ToString(), typeof(AudioSource)).GetComponent<AudioSource>();
+			musicSources_[i].transform.parent = this.transform;
+			musicSources_[i].outputAudioMixerGroup = OutputMixerGroup;
+			musicSources_[i].playOnAwake = false;
+			musicSources_[i].loop = false;
+		}
+		for( int i = 0; i < NumTracks; ++i )
+		{
+			transitionMusicSources_[i] = new GameObject("audioSource_t_" + i.ToString(), typeof(AudioSource)).GetComponent<AudioSource>();
+			transitionMusicSources_[i].transform.parent = this.transform;
+			transitionMusicSources_[i].outputAudioMixerGroup = OutputMixerGroup;
+			transitionMusicSources_[i].playOnAwake = false;
+			musicSources_[i].loop = false;
+		}
+	}
+
+	void ResetSectionClips()
+	{
+		for( int i = 0; i < NumTracks; ++i )
+		{
+			if( i < CurrentSection.Clips.Length )
+			{
+				musicSources_[i].clip = CurrentSection.Clips[i];
+				musicSources_[i].timeSamples = 0;
+			}
+			else
+			{
+				musicSources_[i].clip = null;
+			}
+			transitionMusicSources_[i].clip = null;
+		}
+	}
+
+	void ResetModeLayerVolumes()
+	{
+		modeLayerVolumes_.Clear();
+		modeLayerBaseVolumes_.Clear();
+		for( int i = 0; i < NumTracks; ++i )
+		{
+			modeLayerVolumes_.Add(CurrentMode.LayerVolumes[i]);
+			modeLayerBaseVolumes_.Add(CurrentMode.LayerVolumes[i]);
+		}
+		modeVolume_ = CurrentMode.TotalVolume;
+	}
+	
+	// update
 
 	void UpdateVolumes()
 	{
-		float mainVolume = _Volume * modeVolume_;
-		float transitionVolume = _Volume * modeVolume_;
+		float mainVolume = Volume * modeVolume_;
+		float transitionVolume = Volume * modeVolume_;
 		switch( TransitionState )
 		{
 			case ETransitionState.Synced:
@@ -1017,6 +967,8 @@ public class MusicUnity : Music
 			}
 		}
 	}
+	
+	// transition event
 
 	void OnEntryPoint()
 	{
@@ -1075,125 +1027,21 @@ public class MusicUnity : Music
 			}
 		}
 	}
+	
+	// sync
 
-	void SetNextLoop()
+	MusicMeter GetMeterFromTiming(Timing timing)
 	{
-		syncScheduledDSPTime_ = AudioSettings.dspTime + (double)(CurrentSection.LoopEndSample - GetCurrentSample()) / sampleRate_;
-		endScheduledDSPTime_ = syncScheduledDSPTime_;
-		for( int i = 0; i < _NumTracks; ++i )
+		MusicMeter res = null;
+		foreach( MusicMeter meter in CurrentSection.Meters )
 		{
-			if( i < CurrentSection.Clips.Length )
+			if( timing.Bar < meter.StartBar )
 			{
-				// ループ波形予約
-				transitionMusicSources_[i].clip = CurrentSection.Clips[i];
-				transitionMusicSources_[i].timeSamples = CurrentSection.LoopStartSample;
-				transitionMusicSources_[i].PlayScheduled(syncScheduledDSPTime_);
-				musicSources_[i].SetScheduledEndTime(endScheduledDSPTime_);
+				return res;
 			}
-			else
-			{
-				musicSources_[i].clip = null;
-				transitionMusicSources_[i].clip = null;
-			}
+			res = meter;
 		}
-
-		UpdateVolumes();
-
-		TransitionState = ETransitionState.Synced;
-		nextSectionIndex_ = sectionIndex_;
-	}
-
-	void SetNextSection(SectionTransitionParam param)
-	{
-		// 遷移タイミング計算
-		MusicSection requestedSection = Sections[param.SectionIndex];
-		int entryPointSample = requestedSection.EntryPointSample;
-		int currentSample = GetCurrentSample();
-		int syncPointSample = 0;
-		if( FindSyncPoint(param.SyncType, param.SyncFactor, currentSample, entryPointSample, out syncPointSample) == false )
-		{
-			requenstedTransition_ = param;
-			return;
-		}
-
-		// 遷移状態によって前のをキャンセルしたり
-		switch( TransitionState )
-		{
-			case ETransitionState.Ready:
-				// 準備OK
-				break;
-			case ETransitionState.Synced:
-				// 前のをキャンセル
-				CancelSyncedTransition();
-				break;
-			case ETransitionState.Intro:
-			case ETransitionState.PreEntry:
-			case ETransitionState.PostEntry:
-			case ETransitionState.Outro:
-				// 遷移できないはずなんですが……
-				print("invalid transition state " + TransitionState);
-				return;
-		}
-
-		// 波形終了予約
-		endScheduledDSPTime_ = 0.0;
-		if( param.Transition.UseFadeOut == false )
-		{
-			if( param.SyncType == SyncType.ExitPoint )
-			{
-				endScheduledDSPTime_ = AudioSettings.dspTime + (double)(musicSources_[0].clip.samples - currentSample) / sampleRate_; ;
-			}
-			else
-			{
-				endScheduledDSPTime_ = AudioSettings.dspTime + (double)(syncPointSample - currentSample) / sampleRate_;
-			}
-		}
-
-		// 遷移波形予約
-		syncScheduledDSPTime_ = AudioSettings.dspTime + (double)(syncPointSample - currentSample - entryPointSample) / sampleRate_;
-		for( int i = 0; i < _NumTracks; ++i )
-		{
-			if( i < requestedSection.Clips.Length )
-			{
-				transitionMusicSources_[i].clip = requestedSection.Clips[i];
-				transitionMusicSources_[i].timeSamples = 0;
-				transitionMusicSources_[i].PlayScheduled(syncScheduledDSPTime_);
-			}
-			else
-			{
-				transitionMusicSources_[i].clip = null;
-			}
-
-			if( i < CurrentSection.Clips.Length && endScheduledDSPTime_ > 0 )
-			{
-				musicSources_[i].SetScheduledEndTime(endScheduledDSPTime_);
-			}
-		}
-
-		// 状態遷移
-		TransitionState = ETransitionState.Synced;
-		nextSectionIndex_ = param.SectionIndex;
-		requenstedTransition_ = null;
-		executedTransition_ = param;
-
-		// フェード時間計算
-		transitionFadeOutVolume_ = 1.0f;
-		transitionFadeInVolume_ = 1.0f;
-		if( param.Transition.UseFadeOut )
-		{
-			transitionFadeOut_.SetFade(
-				(int)(param.Transition.FadeOutOffset * sampleRate_) + NextSection.EntryPointSample,
-				(int)(param.Transition.FadeOutTime * sampleRate_));
-		}
-		if( param.Transition.UseFadeIn )
-		{
-			transitionFadeInVolume_ = 0.0f;
-			transitionFadeIn_.SetFade(
-				(int)(param.Transition.FadeInOffset * sampleRate_),
-				(int)(param.Transition.FadeInTime * sampleRate_));
-		}
-
-		UpdateVolumes();
+		return res;
 	}
 
 	bool FindSyncPoint(Music.SyncType syncType, int syncFactor, int currentSample, int entryPointSample, out int syncPointSample)
@@ -1289,13 +1137,135 @@ public class MusicUnity : Music
 		}
 		return true;
 	}
+	
+	// transition
+
+	void SetNextLoop()
+	{
+		syncScheduledDSPTime_ = AudioSettings.dspTime + (double)(CurrentSection.LoopEndSample - GetCurrentSample()) / sampleRate_;
+		endScheduledDSPTime_ = syncScheduledDSPTime_;
+		for( int i = 0; i < NumTracks; ++i )
+		{
+			if( i < CurrentSection.Clips.Length )
+			{
+				// ループ波形予約
+				transitionMusicSources_[i].clip = CurrentSection.Clips[i];
+				transitionMusicSources_[i].timeSamples = CurrentSection.LoopStartSample;
+				transitionMusicSources_[i].PlayScheduled(syncScheduledDSPTime_);
+				musicSources_[i].SetScheduledEndTime(endScheduledDSPTime_);
+			}
+			else
+			{
+				musicSources_[i].clip = null;
+				transitionMusicSources_[i].clip = null;
+			}
+		}
+
+		UpdateVolumes();
+
+		TransitionState = ETransitionState.Synced;
+		nextSectionIndex_ = sectionIndex_;
+	}
+
+	void SetNextSection(SectionTransitionParam param)
+	{
+		// 遷移タイミング計算
+		MusicSection requestedSection = Sections[param.SectionIndex];
+		int entryPointSample = requestedSection.EntryPointSample;
+		int currentSample = GetCurrentSample();
+		int syncPointSample = 0;
+		if( FindSyncPoint(param.SyncType, param.SyncFactor, currentSample, entryPointSample, out syncPointSample) == false )
+		{
+			requenstedTransition_ = param;
+			return;
+		}
+
+		// 遷移状態によって前のをキャンセルしたり
+		switch( TransitionState )
+		{
+			case ETransitionState.Ready:
+				// 準備OK
+				break;
+			case ETransitionState.Synced:
+				// 前のをキャンセル
+				CancelSyncedTransition();
+				break;
+			case ETransitionState.Intro:
+			case ETransitionState.PreEntry:
+			case ETransitionState.PostEntry:
+			case ETransitionState.Outro:
+				// 遷移できないはずなんですが……
+				print("invalid transition state " + TransitionState);
+				return;
+		}
+
+		// 波形終了予約
+		endScheduledDSPTime_ = 0.0;
+		if( param.Transition.UseFadeOut == false )
+		{
+			if( param.SyncType == Music.SyncType.ExitPoint )
+			{
+				endScheduledDSPTime_ = AudioSettings.dspTime + (double)(musicSources_[0].clip.samples - currentSample) / sampleRate_; ;
+			}
+			else
+			{
+				endScheduledDSPTime_ = AudioSettings.dspTime + (double)(syncPointSample - currentSample) / sampleRate_;
+			}
+		}
+
+		// 遷移波形予約
+		syncScheduledDSPTime_ = AudioSettings.dspTime + (double)(syncPointSample - currentSample - entryPointSample) / sampleRate_;
+		for( int i = 0; i < NumTracks; ++i )
+		{
+			if( i < requestedSection.Clips.Length )
+			{
+				transitionMusicSources_[i].clip = requestedSection.Clips[i];
+				transitionMusicSources_[i].timeSamples = 0;
+				transitionMusicSources_[i].PlayScheduled(syncScheduledDSPTime_);
+			}
+			else
+			{
+				transitionMusicSources_[i].clip = null;
+			}
+
+			if( i < CurrentSection.Clips.Length && endScheduledDSPTime_ > 0 )
+			{
+				musicSources_[i].SetScheduledEndTime(endScheduledDSPTime_);
+			}
+		}
+
+		// 状態遷移
+		TransitionState = ETransitionState.Synced;
+		nextSectionIndex_ = param.SectionIndex;
+		requenstedTransition_ = null;
+		executedTransition_ = param;
+
+		// フェード時間計算
+		transitionFadeOutVolume_ = 1.0f;
+		transitionFadeInVolume_ = 1.0f;
+		if( param.Transition.UseFadeOut )
+		{
+			transitionFadeOut_.SetFade(
+				(int)(param.Transition.FadeOutOffset * sampleRate_) + NextSection.EntryPointSample,
+				(int)(param.Transition.FadeOutTime * sampleRate_));
+		}
+		if( param.Transition.UseFadeIn )
+		{
+			transitionFadeInVolume_ = 0.0f;
+			transitionFadeIn_.SetFade(
+				(int)(param.Transition.FadeInOffset * sampleRate_),
+				(int)(param.Transition.FadeInTime * sampleRate_));
+		}
+
+		UpdateVolumes();
+	}
 
 	void CancelSyncedTransition()
 	{
 		if( endScheduledDSPTime_ > 0.0 )
 		{
 			endScheduledDSPTime_ = AudioSettings.dspTime + (double)(musicSources_[0].clip.samples - GetCurrentSample()) / sampleRate_;
-			for( int i = 0; i < _NumTracks; ++i )
+			for( int i = 0; i < NumTracks; ++i )
 			{
 				if( musicSources_[i].clip != null )
 				{
@@ -1304,7 +1274,7 @@ public class MusicUnity : Music
 			}
 		}
 
-		for( int i = 0; i < _NumTracks; ++i )
+		for( int i = 0; i < NumTracks; ++i )
 		{
 			if( transitionMusicSources_[i].clip != null )
 			{
@@ -1340,7 +1310,7 @@ public class MusicUnity : Music
 
 		// 遷移タイミング計算
 		int currentSample = GetCurrentSample();
-		int fadeOffsetSample = param.SyncType == SyncType.Immediate ? 0 : (int)(param.FadeOffsetSec * sampleRate_);
+		int fadeOffsetSample = param.SyncType == Music.SyncType.Immediate ? 0 : (int)(param.FadeOffsetSec * sampleRate_);
 		int entryPointSample = Math.Max(-fadeOffsetSample, 0);
 		int syncPointSample = 0;
 		if( FindSyncPoint(param.SyncType, param.SyncFactor, currentSample, entryPointSample, out syncPointSample) == false )
@@ -1351,7 +1321,7 @@ public class MusicUnity : Music
 
 		// BaseVolume計算
 		modeBaseVolume_ = modeVolume_;
-		for( int i = 0; i < _NumTracks; ++i )
+		for( int i = 0; i < NumTracks; ++i )
 		{
 			modeLayerBaseVolumes_[i] = modeLayerVolumes_[i];
 		}
@@ -1375,7 +1345,7 @@ public class MusicUnity : Music
 
 		UpdateVolumes();
 	}
-
+	
 	#endregion
 
 }

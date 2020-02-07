@@ -1,21 +1,18 @@
-﻿//#define ADX2
+//#define ADX2
 #if ADX2
 
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 using System.Xml;
 
 [RequireComponent(typeof(CriAtomSource))]
-public class MusicADX2 : Music
+public class MusicADX2 : MusicBase
 {
-	#region params
+	#region editor params
 
 	public MusicMeter Meter = new MusicMeter(0);
-
-	public int SampleRate = 44100;
 
 	[Tooltip("ブロック遷移時にタイミングを(0,0,0)から開始したい場合はtrue, AtomCraft上のタイムラインと同じように進行させたい場合はfalse")]
 	public bool ResetTimingOnEachBlock = false;
@@ -45,7 +42,7 @@ public class MusicADX2 : Music
 	#endregion
 
 
-	#region block params
+	#region block / aisac params
 
 	[System.Serializable]
 	public class BlockInfo
@@ -65,13 +62,14 @@ public class MusicADX2 : Music
 	private int nextBlockIndex_;
 	private int prevBlockIndex_;
 
-	public BlockInfo CurrentBlock { get { return BlockInfos[currentBlockIndex_]; } }
-	public BlockInfo NextBlock { get { return BlockInfos[nextBlockIndex_]; } }
-	public string NextBlockName { get { return (nextBlockIndex_ >= 0 ? NextBlock.BlockName : ""); } }
-
 	private float lastAisacValue_;
 	private float currentAisacValue_;
 	private Coroutine currentAisacCoroutine_;
+
+	public BlockInfo CurrentBlock { get { return BlockInfos[currentBlockIndex_]; } }
+	public BlockInfo NextBlock { get { return BlockInfos[nextBlockIndex_]; } }
+	public override int SequenceIndex { get { return currentBlockIndex_; } }
+	public override string SequenceName { get { return BlockInfos[currentBlockIndex_].BlockName; } }
 
 	#endregion
 
@@ -86,9 +84,11 @@ public class MusicADX2 : Music
 	#endregion
 
 
-	#region IMusicSource
+	#region override functions
 
-	protected override void Initialize()
+	// internal
+
+	protected override bool ReadyInternal()
 	{
 		atomSource_ = GetComponent<CriAtomSource>();
 		if( atomSource_.playOnStart )
@@ -98,76 +98,65 @@ public class MusicADX2 : Music
 		}
 		acbData_ = CriAtom.GetAcb(atomSource_.cueSheet);
 		acbData_.GetCueInfo(atomSource_.cueName, out cueInfo_);
+		Meter.OnValidate(sampleRate_);
+		return true;
 	}
 
-	protected override void Ready()
-	{
-		base.Ready();
-		currentAisacValue_ = lastAisacValue_ = AisacInitialValue;
-		currentBlockIndex_ = 0;
-		prevBlockIndex_ = 0;
-		nextBlockIndex_ = 0;
-	}
-
-	public override bool PlayOnStart { get; set; }
-
-	public override bool IsPlaying_ { get { return atomSource_ != null && atomSource_.status == CriAtomSource.Status.Playing; } }
-
-	public override float Volume { get { return atomSource_.volume; } set { atomSource_.volume = value; } }
-
-	public override string SequenceName { get { return CurrentBlock.BlockName; } }
-
-	public override int SequenceIndex { get { return currentBlockIndex_; } }
-
-	public override void Play_()
-	{
-		base.Play_();
-
-		atomSource_ = GetComponent<CriAtomSource>();
-		playback_ = atomSource_.Play();
-	}
-
-	public override void Stop_()
-	{
-		if( atomSource_ != null && playback_.status == CriAtomExPlayback.Status.Playing )
-		{
-			atomSource_.Stop();
-		}
-	}
-
-	public override void Suspend_()
-	{
-		if( atomSource_ != null )
-		{
-			atomSource_.Pause(true);
-		}
-	}
-
-	public override void Resume_()
-	{
-		if( atomSource_ != null )
-		{
-			atomSource_.Pause(false);
-		}
-	}
-
-	public override void Seek(int sequenceIndex, Timing seekTiming)
+	protected override void SeekInternal(int sequenceIndex, Timing seekTiming)
 	{
 		nextBlockIndex_ = sequenceIndex;
 		currentBlockIndex_ = sequenceIndex;
 		atomSource_.player.SetFirstBlockIndex(sequenceIndex);
 		atomSource_.startTime = (int)(((float)Meter.GetSampleFromTiming(seekTiming) / SampleRate) * 1000.0f);
 	}
+
+	protected override bool PlayInternal()
+	{
+		playback_ = atomSource_.Play();
+		return true;
+	}
+
+	protected override bool SuspendInternal()
+	{
+		atomSource_.Pause(true);
+		return true;
+	}
+
+	protected override bool ResumeInternal()
+	{
+		atomSource_.Pause(false);
+		return true;
+	}
+
+	protected override bool StopInternal()
+	{
+		atomSource_.Stop();
+		return true;
+	}
+
+	protected override void ResetParamsInternal()
+	{
+		currentAisacValue_ = lastAisacValue_ = AisacInitialValue;
+		currentBlockIndex_ = 0;
+		prevBlockIndex_ = 0;
+		nextBlockIndex_ = 0;
+	}
 	
+	// timing
+
 	protected override int GetCurrentSample()
 	{
-		if( atomSource_ != null && atomSource_.status == CriAtomSource.Status.Playing )
+		if( atomSource_.status == CriAtomSource.Status.Playing )
 		{
 			int startSample = 0;
 			if( ResetTimingOnEachBlock )
 			{
 				startSample = (int)(Meter.SecPerBar * CurrentBlock.StartBar * sampleRate_);
 			}
+
+			// playback_.GetNumPlayedSamplesは、見つかった最初の波形のサンプル数を返してしまうため、
+			// 遷移時に残っていた前のブロックの波形を取ってきてしまうことがあるので、
+			// ミリ秒制度だがGetSequencePositionに変更した。
 			return Math.Max(0, (int)((playback_.GetSequencePosition() / 1000.0) * sampleRate_) - startSample);
 		}
 		return -1;
@@ -175,12 +164,34 @@ public class MusicADX2 : Music
 
 	protected override int GetSampleRate()
 	{
-		return SampleRate;
+		// GetNumPlayedSamplesを使ってないので実質的にサンプルレートは関係ない。
+		return 44100;
 	}
 
 	protected override MusicMeter GetMeterFromSample(int currentSample)
 	{
 		return Meter;
+	}
+
+	protected override Timing GetSequenceEndTiming()
+	{
+		return ResetTimingOnEachBlock ? new Timing(CurrentBlock.NumBar) : null;
+	}
+
+	// update
+
+	protected override bool CheckFinishPlaying()
+	{
+		if( atomSource_.status == CriAtomSource.Status.PlayEnd )
+		{
+			return true;
+		}
+		return false;
+	}
+
+	protected override void UpdateInternal()
+	{
+
 	}
 
 	protected override void UpdateHorizontalState()
@@ -194,22 +205,21 @@ public class MusicADX2 : Music
 
 	}
 
-	protected override Timing GetSequenceEndTiming()
-	{
-		return ResetTimingOnEachBlock ? new Timing(CurrentBlock.NumBar) : null;
-	}
+	// event
 
 	protected override void OnRepeated()
 	{
+		base.OnRepeated();
 		nextBlockIndex_ = -1;
 	}
 
 	protected override void OnHorizontalSequenceChanged()
 	{
+		base.OnHorizontalSequenceChanged();
 		nextBlockIndex_ = -1;
 	}
 
-
+	// interactive music
 
 	public override void SetHorizontalSequence(string name)
 	{
@@ -247,7 +257,7 @@ public class MusicADX2 : Music
 
 	public override void SetVerticalMixByIndex(int index)
 	{
-		if( atomSource_ != null && AisacControlID  >= 0 && AisacStateCount > 1 && playback_.status == CriAtomExPlayback.Status.Playing )
+		if( AisacControlID  >= 0 && AisacStateCount > 1 && playback_.status == CriAtomExPlayback.Status.Playing )
 		{
 			// 前のコルーチンが終わってなければ殺す
 			if( currentAisacCoroutine_ != null )

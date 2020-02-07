@@ -4,17 +4,17 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
-[RequireComponent(typeof(Music))]
+[RequireComponent(typeof(MusicBase))]
 public class MusicDebugText : MonoBehaviour
 {
 	public TextMesh TextMesh;
 	public Text TextUI;
 
-	Music music_;
+	MusicBase music_;
 
 	void Awake()
 	{
-		music_ = GetComponent<Music>();
+		music_ = GetComponent<MusicBase>();
 		UpdateText();
 	}
 
