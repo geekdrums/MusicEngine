@@ -1,200 +1,82 @@
-//Copyright (c) 2014 geekdrums
+//Copyright (c) 2019 geekdrums
 //Released under the MIT license
 //http://opensource.org/licenses/mit-license.php
 //Feel free to use this for your lovely musical games :)
 
 using UnityEngine;
+using UnityEngine.UI;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 
-[ExecuteInEditMode]
-[RequireComponent(typeof(AudioSource))]
-public class Music : MonoBehaviour
+public static class Music
 {
-	#region Section class
-	[Serializable]
-	public class Section
-	{
-		public enum ClipType
-		{
-			None,
-			Loop,
-			Through,
-			End,
-		}
-		public string Name;
-		public int UnitPerBeat;
-		public int UnitPerBar;
-		public double Tempo;
-		public int StartBar;
-		// this will be automatically setted on validate.
-		public int StartTimeSamples;
-		// this will only work when CreateSectionClips == true.
-		public ClipType LoopType;
+	#region static properties
 
-		public Section(int startBar, int mtBeat = 4, int mtBar = 16, double tempo = 120)
-		{
-			StartBar = startBar;
-			UnitPerBeat = mtBeat;
-			UnitPerBar = mtBar;
-			Tempo = tempo;
-		}
+	public static MusicBase Current { get { return Current_; } }
 
-		public void OnValidate(int startTimeSample)
-		{
-			StartTimeSamples = startTimeSample;
-		}
-
-		public override string ToString()
-		{
-			return string.Format("\"{0}\" StartBar:{1}, Tempo:{2}", Name, StartBar, Tempo);
-		}
-	}
-
-	public Section this[int index]
-	{
-		get
-		{
-			if( 0 <= index && index < SectionCount_ )
-			{
-				return Sections[index];
-			}
-			else
-			{
-				Debug.LogWarning("Section index out of range! index = " + index + ", SectionCount = " + SectionCount_);
-				return null;
-			}
-		}
-	}
-	#endregion
-
-	static Music Current_;
-	static List<Music> MusicList_ = new List<Music>();
-
-	#region editor params
-	public List<Section> Sections;
-
+	public static bool IsPlaying { get { return Current_.IsPlaying; } }
 	/// <summary>
-	/// Just for music that doesn't start with the first timesample.
-	/// if so, specify time samples before music goes into first timing = (0,0,0).
+	/// means last timing.
 	/// </summary>
-	public int EntryPointSample = 0;
-
+	public static Timing Just { get { return Current_.Just; } }
 	/// <summary>
-	/// put your debug GUIText to see current musical time & section info.
+	/// means nearest timing.
 	/// </summary>
-	public TextMesh DebugText;
-
-	public bool CreateSectionClips;
-	#endregion
-
-	#region public static properties
-	public static bool IsPlaying { get { return Current_.IsPlaying_; } }
-	/// <summary>
-	/// last timing.
-	/// </summary>
-	public static Timing Just { get { return Current_.just_; } }
-	/// <summary>
-	/// nearest timing.
-	/// </summary>
-	public static Timing Near { get { return Current_.near_; } }
+	public static Timing Near { get { return Current_.Near; } }
 	/// <summary>
 	/// is Just changed in this frame or not.
 	/// </summary>
-	public static bool IsJustChanged { get { return Current_.isJustChanged_; } }
+	public static bool IsJustChanged { get { return Current_.IsJustChanged; } }
 	/// <summary>
 	/// is Near changed in this frame or not.
 	/// </summary>
-	public static bool IsNearChanged { get { return Current_.isNearChanged_; } }
+	public static bool IsNearChanged { get { return Current_.IsNearChanged; } }
 	/// <summary>
 	/// is currently former half in a MusicTimeUnit, or last half.
 	/// </summary>
-	public static bool IsFormerHalf { get { return Current_.isFormerHalf_; } }
-	/// <summary>
-	/// delta time from JustChanged.
-	/// </summary>
-	public static double TimeSecFromJust { get { return Current_.timeSecFromJust_; } }
+	public static bool IsFormerHalf { get { return Current_.IsFormerHalf; } }
 	/// <summary>
 	/// how many times you repeat current music/block.
 	/// </summary>
-	public static int NumRepeat { get { return Current_.numRepeat_; } }
+	public static int NumRepeat { get { return Current_.NumRepeat; } }
+
 	/// <summary>
 	/// returns how long from nearest Just timing with sign.
 	/// </summary>
-	public static double Lag { get { return Current_.Lag_; } }
+	public static double SecFromJust { get { return Current_.SecFromJust; } }
 	/// <summary>
 	/// returns how long from nearest Just timing absolutely.
 	/// </summary>
-	public static double LagAbs { get { return Current_.LagAbs_; } }
+	public static double SecFromJustAbs { get { return Current_.SecFromJustAbs; } }
 	/// <summary>
 	/// returns normalized lag.
 	/// </summary>
-	public static double LagUnit { get { return Current_.LagUnit_; } }
+	public static double UnitFromJust { get { return Current_.UnitFromJust; } }
+	
+	public static bool HasValidMeter { get { return Current_ != null && Current_.CurrentMeter != null; } }
+	public static MusicMeter CurrentMeter { get { return Current_.CurrentMeter; } }
+	public static int CurrentUnitPerBar { get { return Current_.CurrentMeter.UnitPerBar; } }
+	public static int CurrentUnitPerBeat { get { return Current_.CurrentMeter.UnitPerBeat; } }
+	public static double CurrentTempo { get { return Current_.CurrentMeter.Tempo; } }
+
+	public static string CurrentMusicName { get { return Current_.name; } }
+	public static string CurrentSequenceName { get { return Current_.SequenceName; } }
+	public static int CurrentSequenceIndex { get { return Current_.SequenceIndex; } }
+
 	/// <summary>
-	/// sec / musicalUnit
+	/// current musical time in units
 	/// </summary>
-	public static double MusicTimeUnit { get { return Current_.musicTimeUnit_; } }
+	public static int JustTotalUnits { get { return Current_.JustTotalUnits; } }
 	/// <summary>
-	/// current musical time based on MusicalTimeUnit
-	/// **warning** if CurrentSection.UnitPerBar changed, this is not continuous.
+	/// current musical time in units
 	/// </summary>
-	public static float MusicalTime { get { return Current_.MusicalTime_; } }
+	public static int NearTotalUnits { get { return Current_.NearTotalUnits; } }
 	/// <summary>
-	/// current musical time based on MusicalBar.
-	/// This is always continuous(MusicalTime is not).
+	/// current musical time in bars
 	/// </summary>
-	public static float MusicalTimeBar { get { return Current_.MusicalTimeBar_; } }
-	/// <summary>
-	/// dif from timing to Just on musical time unit.
-	/// </summary>
-	/// <param name="timing"></param>
-	/// <returns></returns>
-	public static float MusicalTimeFrom(Timing timing)
-	{
-		int index = 0;
-		for( int i=0; i<SectionCount; ++i )
-		{
-			if( i + 1 < SectionCount )
-			{
-				if( timing.Bar < Current_[i+1].StartBar )
-				{
-					index = i;
-					break;
-				}
-			}
-			else
-			{
-				index = i;
-			}
-		}
-		int startIndex = Mathf.Min(index, Current_.sectionIndex_);
-		int endIndex = Mathf.Max(index, Current_.sectionIndex_);
-		Timing currentTiming = new Timing(timing < Just ? timing : Just);
-		Timing endTiming = (timing > Just ? timing : Just);
-		int musicalTime = 0;
-		for( int i=startIndex; i<=endIndex; ++i )
-		{
-			if( i < endIndex )
-			{
-				musicalTime += Current_[i+1].StartBar * Current_[i].UnitPerBar - currentTiming.GetMusicalTime(Current_[i]);
-				currentTiming.Set(Current_[i+1].StartBar);
-			}
-			else
-			{
-				musicalTime += endTiming.GetMusicalTime(Current_[i]) - currentTiming.GetMusicalTime(Current_[i]);
-			}
-		}
-		return (float)((timing > Just ? -1 : 1) * musicalTime + TimeSecFromJust / MusicTimeUnit);
-	}
-	/// <summary>
-	/// current audio play time in sec.
-	/// </summary>
-	public static float AudioTimeSec { get { return Current_.AudioTimeSec_; } }
-	/// <summary>
-	/// current audio play sample
-	/// </summary>
-	public static int TimeSamples { get { return Current_.TimeSamples_; } }
+	public static float MusicalTime { get { return Current_.MusicalTime; } }
+
 	/// <summary>
 	/// returns musically synced cos wave.
 	/// if default( MusicalCos(16,0,0,1),
@@ -209,842 +91,716 @@ public class Music : MonoBehaviour
 	/// <returns></returns>
 	public static float MusicalCos(float cycle = 16, float offset = 0, float min = 0, float max = 1)
 	{
-		return Mathf.Lerp(min, max, ((float)Math.Cos(Math.PI * 2 * (MusicalTime + offset) / cycle) + 1.0f)/2.0f);
+		return Mathf.Lerp(min, max, ((float)Math.Cos(Math.PI * 2 * (CurrentUnitPerBar * MusicalTime + offset) / cycle) + 1.0f) / 2.0f);
 	}
 
-	public static int UnitPerBar { get { return Current_.UnitPerBar_; } }
-	public static int UnitPerBeat { get { return Current_.UnitPerBeat_; } }
-	public static AudioSource CurrentSource { get { return Current_.musicSource_; } }
-	public static Section CurrentSection { get { return Current_.CurrentSection_; } }
-	public static int CurrentSectionIndex { get { return Current_.sectionIndex_; } }
-	public static int SectionCount { get { return Current_.SectionCount_; } }
-	public static string CurrentMusicName { get { return Current_.name; } }
-	public static Section GetSection(int index)
-	{
-		return Current_[index];
-	}
-	public static Section GetSection(string sectionName)
-	{
-		return Current_.Sections.Find((Section s) => s.Name == sectionName);
-	}
-	/// <summary>
-	/// this will only work when CreateSectionClips == true.
-	/// </summary>
-	public static bool IsTransitioning { get { return Current_.isTransitioning_; } }
 	#endregion
 
-	#region public static predicates
-	public static bool IsJustChangedWhen(System.Predicate<Timing> pred)
+
+	#region static predicates
+
+	public static bool IsJustChangedWhen(Predicate<Timing> pred)
 	{
-		return Current_.IsJustChangedWhen_(pred);
+		return Current_.IsJustChangedWhen(pred);
 	}
 	public static bool IsJustChangedBar()
 	{
-		return Current_.IsJustChangedBar_();
+		return Current_.IsJustChangedBar();
 	}
 	public static bool IsJustChangedBeat()
 	{
-		return Current_.IsJustChangedBeat_();
+		return Current_.IsJustChangedBeat();
 	}
 	public static bool IsJustChangedAt(int bar = 0, int beat = 0, int unit = 0)
 	{
-		return Current_.IsJustChangedAt_(bar, beat, unit);
+		return Current_.IsJustChangedAt(bar, beat, unit);
 	}
 	public static bool IsJustChangedAt(Timing t)
 	{
-		return Current_.IsJustChangedAt_(t.Bar, t.Beat, t.Unit);
-	}
-	public static bool IsJustChangedSection(string sectionName = "")
-	{
-		Section targetSection = (sectionName == "" ? CurrentSection : GetSection(sectionName));
-		if( targetSection != null )
-		{
-			return IsJustChangedAt(targetSection.StartBar);
-		}
-		else
-		{
-			Debug.LogWarning("Can't find section name: " + sectionName);
-			return false;
-		}
+		return Current_.IsJustChangedAt(t.Bar, t.Beat, t.Unit);
 	}
 
-	public static bool IsNearChangedWhen(System.Predicate<Timing> pred)
+	public static bool IsNearChangedWhen(Predicate<Timing> pred)
 	{
-		return Current_.IsNearChangedWhen_(pred);
+		return Current_.IsNearChangedWhen(pred);
 	}
 	public static bool IsNearChangedBar()
 	{
-		return Current_.IsNearChangedBar_();
+		return Current_.IsNearChangedBar();
 	}
 	public static bool IsNearChangedBeat()
 	{
-		return Current_.IsNearChangedBeat_();
+		return Current_.IsNearChangedBeat();
 	}
 	public static bool IsNearChangedAt(int bar, int beat = 0, int unit = 0)
 	{
-		return Current_.IsNearChangedAt_(bar, beat, unit);
+		return Current_.IsNearChangedAt(bar, beat, unit);
 	}
 	public static bool IsNearChangedAt(Timing t)
 	{
-		return Current_.IsNearChangedAt_(t.Bar, t.Beat, t.Unit);
+		return Current_.IsNearChangedAt(t.Bar, t.Beat, t.Unit);
 	}
+
 	#endregion
 
-	#region public static functions
+
+	#region static functions
+
 	/// <summary>
 	/// Change Current Music.
 	/// </summary>
-	/// <param name="MusicName">name of the GameObject that include Music</param>
-	public static void Play(string musicName, string sectionName = "") { MusicList_.Find((Music m) => m.name == musicName).PlayStart(sectionName); }
-	/// <summary>
-	/// Quantize to musical time.
-	/// </summary>
-	public static void QuantizePlay(AudioSource source, int transpose = 0, float allowRange = 0.3f)
+	/// <param name="musicName">name of the GameObject that include Music</param>
+	public static void Play(string musicName)
 	{
-		source.pitch = Mathf.Pow(PITCH_UNIT, transpose);
-		if( IsFormerHalf && LagUnit < allowRange )
+		MusicBase music = MusicList_.Find((MusicBase m) => m != null && m.name == musicName);
+		if( music != null )
 		{
-			source.Play();
+			Play(music);
 		}
 		else
 		{
-			Current_.quantizedCue_.Add(source);
+			Debug.Log("Can't find music: " + musicName);
 		}
 	}
-	public static void Pause() { Current_.musicSource_.Pause(); }
-	public static void Resume() { Current_.musicSource_.Play(); }
-	public static void Stop()
-	{ 
-		Current_.musicSource_.Stop();
-		if( Current_.isTransitioning_ )
-		{
-			foreach( AudioSource source in Current_.sectionSources_ )
-			{
-				source.Stop();
-			}
-			Current_.isTransitioning_ = false;
-		}
-	}
-	public static void Seek(Timing timing)
+
+	public static void Play(MusicBase music)
 	{
-		Section section = null;
-		for( int i=0; i<SectionCount; ++i )
+		if( Current_ != null && Current_.IsPlaying )
 		{
-			if( i + 1 < SectionCount )
-			{
-				if( timing.Bar < Current_[i+1].StartBar )
-				{
-					section = Current_[i];
-				}
-			}
-			else
-			{
-				section = Current_[i];
-			}
+			Current_.Stop();
 		}
-		int deltaMT = (timing.GetMusicalTime(section) - section.StartBar * section.UnitPerBar);
-		Current_.musicSource_.timeSamples = section.StartTimeSamples + (int)(deltaMT* MusicTimeUnit * Current_.samplingRate_);
+
+		music.Play();
 	}
-	public static void SeekToSection(string sectionName)
+
+	public static void PlayFrom(string musicName, int sequenceIndex, Timing seekTiming)
 	{
-		Current_.SeekToSection_(sectionName);
-	}
-	public static void SetVolume(float volume)
-	{
-		Current_.musicSource_.volume = volume;
-		if( Current_.CreateSectionClips )
+		MusicBase music = MusicList_.Find((MusicBase m) => m != null && m.name == musicName);
+		if( music != null )
 		{
-			foreach( AudioSource source in Current_.sectionSources_ )
-			{
-				source.volume = volume;
-			}
+			music.PlayFrom(sequenceIndex, seekTiming);
+		}
+		else
+		{
+			Debug.Log("Can't find music: " + musicName);
 		}
 	}
+
+	public static void PlayFrom(MusicBase music, int sequenceIndex, Timing seekTiming)
+	{
+		music.PlayFrom(sequenceIndex, seekTiming);
+	}
+
+	public static void Suspend() { Current_.Suspend(); }
+	public static void Resume() { Current_.Resume(); }
+	public static void Stop() { Current_.Stop(); }
+
+	#endregion
+
+
+	#region static params
+
+	static MusicBase Current_;
+	static List<MusicBase> MusicList_ = new List<MusicBase>();
+
+	public static void OnPlay(MusicBase music)
+	{
+		Current_ = music;
+	}
+
+	public static void OnFinish(MusicBase music)
+	{
+		if( Current_ == music )
+		{
+			Current_ = null;
+		}
+	}
+
+	public static void RegisterMusic(MusicBase music)
+	{
+		if( MusicList_.Contains(music) == false )
+		{
+			MusicList_.Add(music);
+		}
+	}
+
+	#endregion
+
+
+	#region enum / delegate
+
+	public enum PlayState
+	{
+		Invalid,
+		Ready,
+		Playing,
+		Suspended,
+		Finished
+	};
 
 	public enum SyncType
 	{
-		NextBeat,
-		Next2Beat,
-		NextBar,
-		Next2Bar,
-		Next4Bar,
-		Next8Bar,
-		SectionEnd,
-	}
+		Immediate,
+		Unit,
+		Beat,
+		Bar,
+		Marker,
+		ExitPoint,
+	};
 
-	public static void SetNextSection(int sectionIndex, SyncType syncType = SyncType.NextBar)
+	public enum TimeUnitType
 	{
-		Current_.SetNextSection_(sectionIndex, syncType);
-	}
-	public static void SetNextSection(string name, SyncType syncType = SyncType.NextBar)
+		Sec,
+		MSec,
+		Bar,
+		Beat,
+		Unit,
+		Sample,
+	};
+
+	public static class TimeUtility
 	{
-		SetNextSection(Current_.Sections.FindIndex((Section s) => s.Name == name), syncType);
-	}
-	#endregion
+		public static float DefaultBPM = 120;
 
-	#region private params
-	private Timing just_;
-	private Timing near_;
-	private bool isJustChanged_;
-	private bool isNearChanged_;
-	private bool isFormerHalf_;
-	private double timeSecFromJust_;
-	private int numRepeat_;
-	private double musicTimeUnit_;
-
-	private AudioSource musicSource_;
-	private int sectionIndex_;
-	private int currentSample_;
-
-	private int samplingRate_;
-	private int samplesPerUnit_;
-	private int samplesPerBeat_;
-	private int samplesPerBar_;
-	private int samplesInLoop_;
-
-	private Timing oldNear_, oldJust_;
-	private int numLoopBar_ = -1;
-	private List<AudioSource> quantizedCue_ = new List<AudioSource>();
-	private static readonly float PITCH_UNIT = Mathf.Pow(2.0f, 1.0f / 12.0f);
-
-	private List<AudioSource> sectionSources_ = new List<AudioSource>();
-	private bool isTransitioning_ = false;
-	private Timing transitionTiming_ = new Timing(0);
-	#endregion
-
-	#region private properties
-	private double Lag_
-	{
-		get
+		public static float ConvertTime(float time, TimeUnitType from, TimeUnitType to = TimeUnitType.Sec)
 		{
-			if( isFormerHalf_ )
-				return timeSecFromJust_;
+			if( from == to ) return time;
+
+			float sec = time;
+			if( from == TimeUnitType.Sec )
+			{
+				sec = time;
+			}
+			else if( from == TimeUnitType.MSec )
+			{
+				sec = time / 1000.0f;
+			}
+			else if( from == TimeUnitType.Sample )
+			{
+				sec = (float)time / Current_.SampleRate;
+			}
 			else
-				return timeSecFromJust_ - musicTimeUnit_;
-		}
-	}
-	private double LagAbs_
-	{
-		get
-		{
-			if( isFormerHalf_ )
-				return timeSecFromJust_;
-			else
-				return musicTimeUnit_ - timeSecFromJust_;
-		}
-	}
-	private double LagUnit_ { get { return Lag / musicTimeUnit_; } }
-	private float MusicalTime_ { get { return (float)(just_.GetMusicalTime(CurrentSection_) + timeSecFromJust_ / musicTimeUnit_); } }
-	private float MusicalTimeBar_ { get { return MusicalTime_/CurrentSection_.UnitPerBar; } }
-	private float AudioTimeSec_ { get { return musicSource_.time; } }
-	private int TimeSamples_ { get { return musicSource_.timeSamples; } }
-	private int SectionCount_ { get { return Sections.Count; } }
-	private int UnitPerBar_ { get { return CurrentSection.UnitPerBar; } }
-	private int UnitPerBeat_ { get { return CurrentSection.UnitPerBeat; } }
-	private bool IsPlaying_ { get { return (musicSource_ != null && musicSource_.isPlaying); } }
-	private Section CurrentSection_ { get { return Sections[sectionIndex_]; } }
-	#endregion
-
-	#region private predicates
-	private bool IsNearChangedWhen_(System.Predicate<Timing> pred)
-	{
-		return isNearChanged_ && pred(near_);
-	}
-	private bool IsNearChangedBar_()
-	{
-		return isNearChanged_ && near_.Beat == 0 && near_.Unit == 0;
-	}
-	private bool IsNearChangedBeat_()
-	{
-		return isNearChanged_ && near_.Unit == 0;
-	}
-	private bool IsNearChangedAt_(int bar, int beat = 0, int unit = 0)
-	{
-		return isNearChanged_ &&
-			near_.Bar == bar && near_.Beat == beat && near_.Unit == unit;
-	}
-	private bool IsJustChangedWhen_(System.Predicate<Timing> pred)
-	{
-		return isJustChanged_ && pred(just_);
-	}
-	private bool IsJustChangedBar_()
-	{
-		return isJustChanged_ && just_.Beat == 0 && just_.Unit == 0;
-	}
-	private bool IsJustChangedBeat_()
-	{
-		return isJustChanged_ && just_.Unit == 0;
-	}
-	private bool IsJustChangedAt_(int bar = 0, int beat = 0, int unit = 0)
-	{
-		return isJustChanged_ &&
-			just_.Bar == bar && just_.Beat == beat && just_.Unit == unit;
-	}
-	#endregion
-
-	#region private functions
-	void Awake()
-	{
-#if UNITY_EDITOR
-		if( !UnityEditor.EditorApplication.isPlaying )
-		{
-			OnValidate();
-			return;
-		}
-#endif
-		MusicList_.Add(this);
-		musicSource_ = GetComponent<AudioSource>();
-		if( Current_ == null || musicSource_.playOnAwake )
-		{
-			Current_ = this;
-		}
-		samplingRate_ = musicSource_.clip.frequency;
-		if( musicSource_.loop )
-		{
-			samplesInLoop_ = musicSource_.clip.samples;
-			Section lastSection = Sections[Sections.Count - 1];
-			double beatSec = (60.0 / lastSection.Tempo);
-			int samplesPerBar = (int)(samplingRate_ * lastSection.UnitPerBar * (beatSec/lastSection.UnitPerBeat));
-			numLoopBar_ = lastSection.StartBar + Mathf.RoundToInt((float)(samplesInLoop_ - lastSection.StartTimeSamples) / (float)samplesPerBar);
-		}
-
-		if( CreateSectionClips )
-		{
-			AudioClip[] clips = new AudioClip[Sections.Count];
-			int previousSectionSample = 0;
-			for( int i=0; i<Sections.Count; ++i )
 			{
-				int nextSectionSample = ( i + 1 < Sections.Count ? Sections[i+1].StartTimeSamples : musicSource_.clip.samples);
-				clips[i] = AudioClip.Create(Sections[i].Name + "_clip", nextSectionSample - previousSectionSample, musicSource_.clip.channels, musicSource_.clip.frequency, false);
-				previousSectionSample = nextSectionSample;
-				float[] waveData = new float[clips[i].samples * clips[i].channels];
-				musicSource_.clip.GetData(waveData, Sections[i].StartTimeSamples);
-				clips[i].SetData(waveData, 0);
-				AudioSource sectionSource = new GameObject("section_" + Sections[i].Name, typeof(AudioSource)).GetComponent<AudioSource>();
-				sectionSource.transform.parent = this.transform;
-				sectionSource.clip = clips[i];
-				sectionSource.loop = Sections[i].LoopType == Section.ClipType.Loop;
-				sectionSource.outputAudioMixerGroup = musicSource_.outputAudioMixerGroup;
-				sectionSource.volume = musicSource_.volume;
-				sectionSource.pitch = musicSource_.pitch;
-				sectionSource.playOnAwake = false;
-				sectionSources_.Add(sectionSource);
-			}
-			musicSource_.Stop();
-			musicSource_.enabled = false;
-			musicSource_ = sectionSources_[0];
-		}
-
-		Initialize();
-
-		OnSectionChanged();
-	}
-
-	// Use this for initialization
-	void Start()
-	{
-	}
-
-	// Update is called once per frame
-	void Update()
-	{
-		if( IsPlaying_ || ( CreateSectionClips && CheckClipChange() ) )
-		{
-			UpdateTiming();
-		}
-	}
-
-	void OnValidate()
-	{
-		if( musicSource_ == null )
-		{
-			musicSource_ = GetComponent<AudioSource>();
-		}
-		if( samplingRate_ == 0 )
-		{
-			samplingRate_ = (musicSource_ != null && musicSource_.clip != null ? musicSource_.clip.frequency : 44100);
-		}
-
-		if( Sections == null || Sections.Count == 0 )
-		{
-			Sections = new List<Section>();
-			Sections.Add(new Section(0, 4, 16, 120));
-			Sections[0].OnValidate(EntryPointSample);
-		}
-		else
-		{
-			bool isValidated = true;
-			int timeSamples = EntryPointSample;
-			for( int i = 0; i < Sections.Count; i++ )
-			{
-				if( Sections[i].StartTimeSamples != timeSamples ) isValidated = false;
-				if( isValidated == false )
+				if( HasValidMeter )
 				{
-					Sections[i].OnValidate(timeSamples);
-				}
-				if( i+1 < Sections.Count )
-				{
-					if( Sections[i+1].StartBar < Sections[i].StartBar )
-						Sections[i+1].StartBar = Sections[i].StartBar + 1;
-					int d = (Sections[i+1].StartBar  - Sections[i].StartBar) * Sections[i].UnitPerBar;
-					timeSamples += (int)((d / Sections[i].UnitPerBeat) * (60.0f / Sections[i].Tempo) * samplingRate_);
-				}
-			}
-		}
-
-		if( CreateSectionClips )
-		{
-			musicSource_.playOnAwake = false;
-			for( int i = 0; i < Sections.Count; i++ )
-			{
-				if( Sections[i].LoopType == Section.ClipType.None )
-					Sections[i].LoopType = Section.ClipType.Loop;
-			}
-		}
-	}
-
-	void OnDestroy()
-	{
-		MusicList_.Remove(this);
-	}
-
-	void Initialize()
-	{
-		isJustChanged_ = false;
-		isNearChanged_ = false;
-		near_ = new Timing(0, 0, -1);
-		just_ = new Timing(near_);
-		oldNear_ = new Timing(near_);
-		oldJust_ = new Timing(just_);
-		timeSecFromJust_ = 0;
-		isFormerHalf_ = true;
-		numRepeat_ = 0;
-		sectionIndex_ = 0;
-	}
-
-	void OnSectionChanged()
-	{
-		if( Sections == null || Sections.Count == 0 ) return;
-		if( CurrentSection_.Tempo > 0.0f )
-		{
-			double beatSec = (60.0 / CurrentSection_.Tempo);
-			samplesPerUnit_ = (int)(samplingRate_ * (beatSec/CurrentSection_.UnitPerBeat));
-			samplesPerBeat_ =(int)(samplingRate_ * beatSec);
-			samplesPerBar_ = (int)(samplingRate_ * CurrentSection_.UnitPerBar * (beatSec/CurrentSection_.UnitPerBeat));
-			musicTimeUnit_ = (double)samplesPerUnit_ / (double)samplingRate_;
-			if( CreateSectionClips )
-			{
-				samplesInLoop_ = musicSource_.clip.samples;
-				numLoopBar_ = Mathf.RoundToInt(samplesInLoop_ / (float)samplesPerBar_);
-				if( CurrentSection_.LoopType == Section.ClipType.Through )
-				{
-					SetNextSection_(sectionIndex_ + 1, SyncType.SectionEnd);
-				}
-			}
-		}
-		else
-		{
-			samplesPerUnit_ = 0;
-			samplesPerBeat_ = 0;
-			samplesPerBar_ = 0;
-			musicTimeUnit_ = 0;
-		}
-	}
-
-	void PlayStart(string sectionName = "")
-	{
-		if( Current_ != null && IsPlaying )
-		{
-			Stop();
-		}
-
-		Current_ = this;
-		Initialize();
-		if( sectionName != "" )
-		{
-			if( CreateSectionClips )
-			{
-				int index = Sections.FindIndex((Section s) => s.Name == sectionName);
-				if( index >= 0 )
-				{
-					musicSource_ = sectionSources_[index];
-					sectionIndex_ = index;
-					OnSectionChanged();
+					switch( from )
+					{
+						case TimeUnitType.Bar:
+							sec = time * (float)Current_.CurrentMeter.SecPerBar;
+							break;
+						case TimeUnitType.Beat:
+							sec = time * (float)Current_.CurrentMeter.SecPerBeat;
+							break;
+						case TimeUnitType.Unit:
+							sec = time * (float)Current_.CurrentMeter.SecPerUnit;
+							break;
+					}
 				}
 				else
 				{
-					Debug.LogWarning("Can't find section name: " + sectionName);
+					switch( from )
+					{
+						case TimeUnitType.Bar:
+							sec = time * (60.0f * 4.0f / DefaultBPM);
+							break;
+						case TimeUnitType.Beat:
+							sec = time * (60.0f / DefaultBPM);
+							break;
+						case TimeUnitType.Unit:
+							sec = time * (60.0f / 4.0f / DefaultBPM);
+							break;
+					}
 				}
+			}
+
+			if( to == TimeUnitType.Sec )
+			{
+				return sec;
+			}
+			else if( to == TimeUnitType.MSec )
+			{
+				return sec * 1000.0f;
+			}
+			else if( to == TimeUnitType.Sample )
+			{
+				return sec * Current_.SampleRate;
 			}
 			else
 			{
-				SeekToSection_(sectionName);
-			}
-		}
-		musicSource_.Play();
-	}
-
-	void SeekToSection_(string sectionName)
-	{
-		Section targetSection = GetSection(sectionName);
-		if( targetSection != null )
-		{
-			musicSource_.timeSamples = targetSection.StartTimeSamples;
-			sectionIndex_ = Sections.IndexOf(targetSection);
-			OnSectionChanged();
-		}
-		else
-		{
-			Debug.LogWarning("Can't find section name: " + sectionName);
-		}
-	}
-
-	void SetNextSection_(int sectionIndex, SyncType syncType = SyncType.NextBar)
-	{
-		if( CreateSectionClips == false || isTransitioning_ )
-			return;
-
-		if( sectionIndex < 0 || SectionCount <= sectionIndex || sectionIndex == sectionIndex_ )
-			return;
-
-		int syncUnit = 0;
-		transitionTiming_.Copy(just_);
-		switch( syncType )
-		{
-		case SyncType.NextBeat:
-			syncUnit = samplesPerBeat_;
-			transitionTiming_.Beat += 1;
-			transitionTiming_.Unit = 0;
-			break;
-		case SyncType.Next2Beat:
-			syncUnit = samplesPerBeat_ * 2;
-			transitionTiming_.Beat += 2;
-			transitionTiming_.Unit = 0;
-			break;
-		case SyncType.NextBar:
-			syncUnit = samplesPerBar_;
-			transitionTiming_.Bar += 1;
-			transitionTiming_.Beat = transitionTiming_.Unit = 0;
-			break;
-		case SyncType.Next2Bar:
-			syncUnit = samplesPerBar_ * 2;
-			transitionTiming_.Bar += 2;
-			transitionTiming_.Beat = transitionTiming_.Unit = 0;
-			break;
-		case SyncType.Next4Bar:
-			syncUnit = samplesPerBar_ * 4;
-			transitionTiming_.Bar += 4;
-			transitionTiming_.Beat = transitionTiming_.Unit = 0;
-			break;
-		case SyncType.Next8Bar:
-			syncUnit = samplesPerBar_ * 8;
-			transitionTiming_.Bar += 8;
-			transitionTiming_.Beat = transitionTiming_.Unit = 0;
-			break;
-		case SyncType.SectionEnd:
-			syncUnit = samplesInLoop_;
-			transitionTiming_.Bar = CurrentSection_.StartBar + numLoopBar_;
-			transitionTiming_.Beat = transitionTiming_.Unit = 0;
-			break;
-		}
-		transitionTiming_.Fix(CurrentSection_);
-		if( CurrentSection_.LoopType == Section.ClipType.Loop && transitionTiming_.Bar >= CurrentSection_.StartBar + numLoopBar_ )
-		{
-			transitionTiming_.Bar -= numLoopBar_;
-		}
-
-		if( syncUnit <= 0 )
-			return;
-
-		double transitionTime = AudioSettings.dspTime + (syncUnit - musicSource_.timeSamples % syncUnit) / (double)samplingRate_ / musicSource_.pitch;
-		sectionSources_[sectionIndex].PlayScheduled(transitionTime);
-		sectionSources_[sectionIndex_].SetScheduledEndTime(transitionTime);
-		isTransitioning_ = true;
-	}
-
-	bool CheckClipChange()
-	{
-		if( musicSource_.isPlaying == false )
-		{
-			foreach( AudioSource source in sectionSources_ )
-			{
-				if( source.isPlaying )
+				if( HasValidMeter )
 				{
-					musicSource_ = source;
-					isTransitioning_ = false;
-					return true;
+					switch( to )
+					{
+						case TimeUnitType.Bar:
+							return sec / (float)Current_.CurrentMeter.SecPerBar;
+						case TimeUnitType.Beat:
+							return sec / (float)Current_.CurrentMeter.SecPerBeat;
+						case TimeUnitType.Unit:
+							return sec / (float)Current_.CurrentMeter.SecPerUnit;
+					}
+				}
+				else
+				{
+					switch( to )
+					{
+						case TimeUnitType.Bar:
+							return sec / (60.0f * 4.0f / DefaultBPM);
+						case TimeUnitType.Beat:
+							return sec / (60.0f / DefaultBPM);
+						case TimeUnitType.Unit:
+							return sec / (60.0f / 4.0f / DefaultBPM);
+					}
 				}
 			}
+
+			return sec;
+		}
+	}
+	static readonly float PITCH_UNIT = Mathf.Pow(2.0f, 1.0f / 12.0f);
+
+	#endregion
+}
+
+public abstract class MusicBase : MonoBehaviour
+{
+	#region properties
+
+	// editor params
+	public bool PlayOnStart;
+
+	// state
+	public Music.PlayState State { get; private set; } = Music.PlayState.Invalid;
+	public bool IsPlaying { get { return State == Music.PlayState.Playing; } }
+
+	// timing
+	public Timing Just { get { return just_; } }
+	public Timing Near { get { return near_; } }
+	public bool IsJustChanged { get { return isJustChanged_; } }
+	public bool IsNearChanged { get { return isNearChanged_; } }
+	public bool IsFormerHalf { get { return isFormerHalf_; } }
+
+	// meter
+	public bool HasValidMeter { get { return currentMeter_ != null; } }
+	public MusicMeter CurrentMeter { get { return currentMeter_; } }
+	public int UnitPerBar { get { return currentMeter_.UnitPerBar; } }
+	public int UnitPerBeat { get { return currentMeter_.UnitPerBeat; } }
+	public double Tempo { get { return currentMeter_.Tempo; } }
+	public int SampleRate { get { return sampleRate_; } }
+
+	// from just
+	public double SecFromJust
+	{
+		get
+		{
+			if( isFormerHalf_ )
+				return samplesFromJust_ / sampleRate_;
+			else
+				return samplesFromJust_ / sampleRate_ - currentMeter_.SecPerUnit;
+		}
+	}
+	public double SecFromJustAbs { get { return Math.Abs(SecFromJust); } }
+	public double UnitFromJust { get { return SecFromJust / currentMeter_.SecPerUnit; } }
+	public double UnitFromJustAbs { get { return Math.Abs(UnitFromJust); } }
+
+	// total time / units
+	public float MusicalTime { get { return currentMeter_ != null ? currentMeter_.GetMusicalTime(just_, samplesFromJust_) : -1.0f; } }
+	public int JustTotalUnits { get { return just_.GetTotalUnits(currentMeter_); } }
+	public int NearTotalUnits { get { return near_.GetTotalUnits(currentMeter_); } }
+	
+	// sequence
+	public abstract string SequenceName { get; }
+	public abstract int SequenceIndex { get; }
+	public int NumRepeat { get { return numRepeat_; } }
+
+	#endregion
+
+
+	#region predicates
+
+	public bool IsNearChangedWhen(Predicate<Timing> pred)
+	{
+		if( isNearChanged_ )
+		{
+			if( pred(near_) ) return true;
 		}
 		return false;
+	}
+	public bool IsNearChangedBar()
+	{
+		return isNearChanged_ && (oldNear_.Bar != near_.Bar);
+	}
+	public bool IsNearChangedBeat()
+	{
+		return isNearChanged_ && (oldNear_.Beat != near_.Beat);
+	}
+	public bool IsNearChangedAt(int bar = 0, int beat = 0, int unit = 0)
+	{
+		return IsNearChangedAt(new Timing(bar, beat, unit));
+	}
+	public bool IsNearChangedAt(Timing t)
+	{
+		return (isNearChanged_ && (oldNear_ < t && t <= near_)) || (isNearLooped_ && (oldNear_ < t || t <= near_));
+	}
+	public bool IsJustChangedWhen(Predicate<Timing> pred)
+	{
+		if( isJustChanged_ )
+		{
+			if( pred(just_) ) return true;
+		}
+		return false;
+	}
+	public bool IsJustChangedBar()
+	{
+		return isJustChanged_ && (oldJust_.Bar != just_.Bar);
+	}
+	public bool IsJustChangedBeat()
+	{
+		return isJustChanged_ && (oldJust_.Beat != just_.Beat);
+	}
+	public bool IsJustChangedAt(int bar = 0, int beat = 0, int unit = 0)
+	{
+		return IsJustChangedAt(new Timing(bar, beat, unit));
+	}
+	public bool IsJustChangedAt(Timing t)
+	{
+		return (isJustChanged_ && (oldJust_ < t && t <= just_)) || (isJustLooped_ && (oldJust_ < t || t <= just_));
+	}
+
+	#endregion
+
+
+	#region public functions
+
+	public void Play()
+	{
+		if( State == Music.PlayState.Playing || State == Music.PlayState.Suspended || State == Music.PlayState.Invalid )
+		{
+			return;
+		}
+
+		if( PlayInternal() )
+		{
+			Music.OnPlay(this);
+			State = Music.PlayState.Playing;
+			OnHorizontalSequenceChanged();
+		}
+	}
+
+	public void PlayFrom(int sequenceIndex, Timing seekTiming)
+	{
+		SeekInternal(sequenceIndex, seekTiming);
+		Play();
+	}
+
+	public void Stop()
+	{
+		if( State == Music.PlayState.Invalid )
+		{
+			return;
+		}
+
+		if( StopInternal() )
+		{
+			State = Music.PlayState.Finished;
+			ResetParams();
+			Music.OnFinish(this);
+		}
+	}
+
+	public void Suspend()
+	{
+		if( State != Music.PlayState.Playing )
+		{
+			return;
+		}
+
+		if( SuspendInternal() )
+		{
+			State = Music.PlayState.Suspended;
+		}
+	}
+
+	public void Resume()
+	{
+		if( State != Music.PlayState.Suspended )
+		{
+			return;
+		}
+
+		if( ResumeInternal() )
+		{
+			State = Music.PlayState.Playing;
+		}
+	}
+
+	public abstract void SetHorizontalSequence(string name);
+
+	public abstract void SetHorizontalSequenceByIndex(int index);
+
+	public abstract void SetVerticalMix(string name);
+
+	public abstract void SetVerticalMixByIndex(int index);
+
+	#endregion
+	
+
+	#region protected functions
+
+	// internal
+
+	protected abstract bool ReadyInternal();
+
+	protected abstract void SeekInternal(int sequenceIndex, Timing seekTiming);
+
+	protected abstract bool PlayInternal();
+
+	protected abstract bool SuspendInternal();
+
+	protected abstract bool ResumeInternal();
+
+	protected abstract bool StopInternal();
+
+	protected abstract void ResetParamsInternal();
+	
+	// update
+
+	protected abstract void UpdateInternal();
+
+	protected abstract bool CheckFinishPlaying();
+
+	protected abstract void UpdateHorizontalState();
+
+	protected abstract void UpdateVerticalState();
+	
+	//timing
+
+	protected abstract int GetCurrentSample();
+
+	protected abstract int GetSampleRate();
+
+	protected abstract MusicMeter GetMeterFromSample(int currentSample);
+
+	protected abstract Timing GetSequenceEndTiming();
+
+	#endregion
+
+
+	#region params
+
+	// 現在の曲のサンプルレート。
+	protected int sampleRate_ = 44100;
+	// 現在の再生サンプル数。
+	protected int currentSample_;
+
+	// 現在再生中の箇所のメーター情報。
+	private MusicMeter currentMeter_;
+	// 最新のJustタイミング。(タイミングちょうどになってから切り替わる）
+	private Timing just_ = new Timing(-1, 0, 0);
+	// 最新のNearタイミング。（最も近いタイミングが変わった地点、つまり2つのタイミングの中間で切り替わる）
+	private Timing near_ = new Timing(-1, 0, 0);
+	// 1フレーム前のJustタイミング。
+	private Timing oldJust_ = new Timing(-1, 0, 0);
+	// 1フレーム前のNearタイミング。
+	private Timing oldNear_ = new Timing(-1, 0, 0);
+	// 今のフレームでjust_が変化したフラグ。
+	private bool isJustChanged_ = false;
+	// 今のフレームでnear_が変化したフラグ。
+	private bool isNearChanged_ = false;
+	// 今のフレームでjust_がループして戻ったフラグ。
+	private bool isJustLooped_ = false;
+	// 今のフレームでnear_がループして戻ったフラグ。
+	private bool isNearLooped_ = false;
+	// 今がunit内の前半かどうか。 true なら just_ == near_, false なら ++just == near。
+	private bool isFormerHalf_;
+	// Justのタイミングから何サンプル過ぎているか。
+	private int samplesFromJust_;
+	// 現在のループカウント。
+	private int numRepeat_;
+	// 現在のシーケンス（横の遷移の単位）の小節数。
+	private Timing sequenceEndTiming_ = null;
+
+	#endregion
+
+	
+	#region functions
+
+	void Awake()
+	{
+		Music.RegisterMusic(this);
+		Ready();
+	}
+
+	void Start()
+	{
+		#if UNITY_EDITOR
+		UnityEditor.EditorApplication.pauseStateChanged += OnPlaymodeStateChanged;
+		#endif
+		if( PlayOnStart )
+		{
+			Play();
+		}
+	}
+
+	#if UNITY_EDITOR
+	void OnPlaymodeStateChanged(UnityEditor.PauseState state)
+	{
+		if( IsPlaying )
+		{
+			if( state == UnityEditor.PauseState.Paused )
+			{
+				Suspend();
+			}
+			else
+			{
+				Resume();
+			}
+		}
+	}
+	#endif
+	
+	void Update()
+	{
+		if( IsPlaying )
+		{
+			if( CheckFinishPlaying() )
+			{
+				Stop();
+			}
+			else
+			{
+				UpdateTiming();
+				UpdateInternal();
+			}
+		}
+	}
+	
+	void Ready()
+	{
+		if( State != Music.PlayState.Invalid )
+		{
+			return;
+		}
+		
+		if( ReadyInternal() )
+		{
+			State = Music.PlayState.Ready;
+			sampleRate_ = GetSampleRate();
+			currentMeter_ = GetMeterFromSample(0);
+			ResetParams();
+		}
+	}
+
+	void ResetParams()
+	{
+		currentSample_ = 0;
+		isJustChanged_ = false;
+		isNearChanged_ = false;
+		isJustLooped_ = false;
+		isNearLooped_ = false;
+		near_.Set(-1, 0, 0);
+		just_.Set(-1, 0, 0);
+		oldNear_.Set(near_);
+		oldJust_.Set(just_);
+		samplesFromJust_ = 0;
+		isFormerHalf_ = true;
+		numRepeat_ = 0;
+		sequenceEndTiming_ = null;
+
+		ResetParamsInternal();
 	}
 
 	void UpdateTiming()
 	{
-		// find section index
-		int newIndex = sectionIndex_;
-		if( CreateSectionClips )
+		int oldSample = currentSample_;
+		oldNear_.Set(near_);
+		oldJust_.Set(just_);
+		isNearChanged_ = false;
+		isJustChanged_ = false;
+		isJustLooped_ = false;
+		isNearLooped_ = false;
+
+		int oldSequenceIndex = SequenceIndex;
+		UpdateHorizontalState();
+		UpdateVerticalState();
+
+		currentSample_ = GetCurrentSample();
+		if( currentSample_ < 0 )
 		{
-			newIndex = sectionSources_.IndexOf(musicSource_);
-			currentSample_ = musicSource_.timeSamples;
+			return;
+		}
+
+		currentMeter_ = GetMeterFromSample(currentSample_);
+		if( currentMeter_ == null )
+		{
+			just_.Set(-1, 0, 0);
 		}
 		else
 		{
-			int oldSample = currentSample_;
-			currentSample_ = musicSource_.timeSamples;
-			if( sectionIndex_ + 1 >= Sections.Count )
-			{
-				if( currentSample_ < oldSample )
-				{
-					newIndex = 0;
-				}
-			}
-			else
-			{
-				if( Sections[sectionIndex_ + 1].StartTimeSamples <= currentSample_ )
-				{
-					newIndex = sectionIndex_ + 1;
-				}
-			}
-		}
+			int meterSample = currentSample_ - currentMeter_.StartSamples;
+			int bar = (int)(meterSample / currentMeter_.SamplesPerBar);
+			int beat = (int)((meterSample - bar * currentMeter_.SamplesPerBar) / currentMeter_.SamplesPerBeat);
+			int unit = (int)(((meterSample - bar * currentMeter_.SamplesPerBar) - beat * currentMeter_.SamplesPerBeat) / currentMeter_.SamplesPerUnit);
+			just_.Set(bar + currentMeter_.StartBar, beat, unit);
+			just_.Fix(currentMeter_);
 
-		if( newIndex != sectionIndex_ )
-		{
-			sectionIndex_ = newIndex;
-			OnSectionChanged();
-		}
-
-		// calc current timing
-		isNearChanged_ = false;
-		isJustChanged_ = false;
-		int sectionSample =  currentSample_ - (CreateSectionClips ? 0 : CurrentSection_.StartTimeSamples);
-		if( sectionSample >= 0 )
-		{
-			just_.Bar = (int)(sectionSample / samplesPerBar_) + CurrentSection_.StartBar;
-			just_.Beat = (int)((sectionSample % samplesPerBar_) / samplesPerBeat_);
-			just_.Unit = (int)(((sectionSample % samplesPerBar_) % samplesPerBeat_) / samplesPerUnit_);
-			just_.Fix(CurrentSection_);
-			if( CreateSectionClips )
+			while( sequenceEndTiming_ != null && just_ >= sequenceEndTiming_ )
 			{
-				if( CurrentSection_.LoopType == Section.ClipType.Loop && numLoopBar_ > 0 )
-				{
-					just_.Bar -= CurrentSection_.StartBar;
-					while( just_.Bar >= numLoopBar_ )
-					{
-						just_.Decrement(CurrentSection_);
-					}
-					just_.Bar += CurrentSection_.StartBar;
-				}
-
-				if( isTransitioning_ && just_.Equals(transitionTiming_) )
-				{
-					if( CurrentSection_.LoopType == Section.ClipType.Loop && just_.Bar == CurrentSection_.StartBar )
-						just_.Bar = CurrentSection_.StartBar + numLoopBar_;
-					just_.Decrement(CurrentSection_);
-				}
+				just_.Decrement(currentMeter_);
 			}
-			else
+
+			samplesFromJust_ = currentSample_ - currentMeter_.GetSampleFromTiming(just_);
+			isFormerHalf_ = samplesFromJust_ < currentMeter_.SamplesPerUnit / 2;
+
+			near_.Set(just_);
+			if( !isFormerHalf_ )
 			{
-				if( sectionIndex_ + 1 >= Sections.Count )
+				near_.Increment(currentMeter_);
+			}
+			if( sequenceEndTiming_ != null && near_ >= sequenceEndTiming_ )
+			{
+				near_.Reset();
+			}
+
+			isJustChanged_ = (just_.Equals(oldJust_) == false);
+			isNearChanged_ = (near_.Equals(oldNear_) == false);
+			isJustLooped_ = isJustChanged_ && just_ < oldJust_;
+			isNearLooped_ = isNearChanged_ && near_ < oldNear_;
+
+			if( isJustLooped_ )
+			{
+				if( oldSequenceIndex != SequenceIndex )
 				{
-					if( numLoopBar_ > 0 )
-					{
-						while( just_.Bar >= numLoopBar_ )
-						{
-							just_.Decrement(CurrentSection_);
-						}
-					}
+					OnHorizontalSequenceChanged();
 				}
 				else
 				{
-					while( just_.Bar >= Sections[sectionIndex_+1].StartBar )
-					{
-						just_.Decrement(CurrentSection_);
-					}
+					OnRepeated();
 				}
 			}
-
-			just_.Bar -= CurrentSection_.StartBar;
-			timeSecFromJust_ = (double)(sectionSample - just_.Bar * samplesPerBar_ - just_.Beat * samplesPerBeat_ - just_.Unit * samplesPerUnit_) / (double)samplingRate_;
-			isFormerHalf_ = (timeSecFromJust_ * samplingRate_) < samplesPerUnit_ / 2;
-			just_.Bar += CurrentSection_.StartBar;
-
-			near_.Copy(just_);
-			if( !isFormerHalf_ ) near_.Increment(CurrentSection_);
-			if( samplesInLoop_ != 0 && currentSample_ + samplesPerUnit_/2 >= samplesInLoop_ )
-			{
-				near_.Init();
-			}
-
-			isNearChanged_ = (near_.Equals(oldNear_) == false);
-			isJustChanged_ = (just_.Equals(oldJust_) == false);
-
-			CallEvents();
-
-			oldNear_.Copy(near_);
-			oldJust_.Copy(just_);
-		}
-		
-		if( DebugText != null )
-		{
-			DebugText.text = "Just = " + Just.ToString() + ", MusicalTime = " + MusicalTime_;
-			if( Sections.Count > 0 )
-			{
-				DebugText.text += System.Environment.NewLine + "section[" + sectionIndex_ + "] = " + CurrentSection_.ToString();
-			}
 		}
 	}
-
-	void CallEvents()
+	
+	public override string ToString()
 	{
-		if( isJustChanged_ ) OnJustChanged();
-		if( isJustChanged_ && just_.Unit == 0 ) OnBeat();
-		if( isJustChanged_ && just_.Unit == 0 && just_.Beat == 0 ) OnBar();
-		if( isJustChanged_ && oldJust_ > just_ )
-		{
-			OnRepeated();
-		}
+		return String.Format("{0}", just_.ToString());
 	}
 
-	//On events (when isJustChanged)
-	void OnJustChanged()
-	{
-		foreach( AudioSource cue in quantizedCue_ )
-		{
-			cue.Play();
-		}
-		quantizedCue_.Clear();
-	}
+	#endregion
 
-	void OnBeat()
-	{
-	}
 
-	void OnBar()
-	{
-	}
-
-	void OnRepeated()
+	#region events
+	
+	protected virtual void OnRepeated()
 	{
 		++numRepeat_;
 	}
+
+	protected virtual void OnHorizontalSequenceChanged()
+	{
+		numRepeat_ = 0;
+		sequenceEndTiming_ = GetSequenceEndTiming();
+	}
+
 	#endregion
-}
-
-[Serializable]
-public class Timing : IComparable<Timing>, IEquatable<Timing>
-{
-	public Timing(int bar = 0, int beat = 0, int unit = 0)
-	{
-		Bar = bar;
-		Beat = beat;
-		Unit = unit;
-	}
-
-	public Timing(Timing copy)
-	{
-		Copy(copy);
-	}
-	public Timing() { this.Init(); }
-	public void Init() { Bar = 0; Beat = 0; Unit = 0; }
-	public void Copy(Timing copy)
-	{
-		Bar = copy.Bar;
-		Beat = copy.Beat;
-		Unit = copy.Unit;
-	}
-	public void Set(int bar, int beat = 0, int unit = 0)
-	{
-		Bar = bar;
-		Beat = beat;
-		Unit = unit;
-	}
-
-	public int Bar, Beat, Unit;
-
-	public int CurrentMusicalTime { get { return GetMusicalTime(Music.CurrentSection); } }
-	public int GetMusicalTime(Music.Section section)
-	{
-		return Bar * section.UnitPerBar + Beat * section.UnitPerBeat + Unit;
-	}
-	public void Fix(Music.Section section)
-	{
-		int totalUnit = Bar * section.UnitPerBar + Beat * section.UnitPerBeat + Unit;
-		Bar = totalUnit / section.UnitPerBar;
-		Beat = (totalUnit - Bar*section.UnitPerBar) / section.UnitPerBeat;
-		Unit = (totalUnit - Bar*section.UnitPerBar - Beat * section.UnitPerBeat);
-	}
-	public void Increment(Music.Section section)
-	{
-		Unit++;
-		Fix(section);
-	}
-	public void Decrement(Music.Section section)
-	{
-		Unit--;
-		Fix(section);
-	}
-	public void IncrementBeat(Music.Section section)
-	{
-		Beat++;
-		Fix(section);
-	}
-	public void Add(Timing t, Music.Section section)
-	{
-		Bar += t.Bar;
-		Beat += t.Beat;
-		Unit += t.Unit;
-		Fix(section);
-	}
-	public void Subtract(Timing t, Music.Section section)
-	{
-		Bar -= t.Bar;
-		Beat -= t.Beat;
-		Unit -= t.Unit;
-		Fix(section);
-	}
-
-	public static bool operator >(Timing t, Timing t2) { return t.Bar > t2.Bar || (t.Bar == t2.Bar && t.Beat > t2.Beat) || (t.Bar == t2.Bar && t.Beat == t2.Beat && t.Unit > t2.Unit); }
-	public static bool operator <(Timing t, Timing t2) { return !(t > t2) && !(t.Equals(t2)); }
-	public static bool operator <=(Timing t, Timing t2) { return !(t > t2); }
-	public static bool operator >=(Timing t, Timing t2) { return t > t2 || t.Equals(t2); }
-
-	public override bool Equals(object obj)
-	{
-		if( object.ReferenceEquals(obj, null) )
-		{
-			return false;
-		}
-		if( object.ReferenceEquals(obj, this) )
-		{
-			return true;
-		}
-		if( this.GetType() != obj.GetType() )
-		{
-			return false;
-		}
-		return this.Equals(obj as Timing);
-	}
-
-	public override int GetHashCode()
-	{
-		return base.GetHashCode();
-	}
-
-	public bool Equals(Timing other)
-	{
-		return (this.Bar == other.Bar && this.Beat == other.Beat && this.Unit == other.Unit);
-	}
-
-	public int CompareTo(Timing tother)
-	{
-		if( this.Equals(tother) ) return 0;
-		else if( this > tother ) return 1;
-		else return -1;
-	}
-
-	public override string ToString()
-	{
-		return Bar + " " + Beat + " " + Unit;
-	}
+	
 }
