@@ -36,7 +36,7 @@ And you can also use interactive music functions such as Horizontal Resequencing
 Add MusicEngine folder to your Unity project.
 
 Use MusicUnity component if you don't use any other audio middleware.  
-Add MusicUnity component and set AudioClips into Sections property.
+Add MusicUnity component and set AudioClips into Sections property.  
 (AudioSource component will be automatically instantiated inside this MusicEngine.)
 
 If you use CRI ADX2 (audio middleware),  enable #ADX2 in MusicADX2.cs.  
