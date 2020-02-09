@@ -40,17 +40,12 @@ public static class Music
 	/// how many times you repeat current music/block.
 	/// </summary>
 	public static int NumRepeat { get { return Current_.NumRepeat; } }
-
 	/// <summary>
-	/// returns how long from nearest Just timing with sign.
+	/// returns sec from last Just timing.
 	/// </summary>
 	public static double SecFromJust { get { return Current_.SecFromJust; } }
 	/// <summary>
-	/// returns how long from nearest Just timing absolutely.
-	/// </summary>
-	public static double SecFromJustAbs { get { return Current_.SecFromJustAbs; } }
-	/// <summary>
-	/// returns normalized lag.
+	/// returns normalized time (0 to 1) from last Just timing.
 	/// </summary>
 	public static double UnitFromJust { get { return Current_.UnitFromJust; } }
 	
@@ -255,7 +250,6 @@ public static class Music
 		Bar,
 		Beat,
 		Unit,
-		Sample,
 	};
 
 	public static class TimeUtility
@@ -274,10 +268,6 @@ public static class Music
 			else if( from == TimeUnitType.MSec )
 			{
 				sec = time / 1000.0f;
-			}
-			else if( from == TimeUnitType.Sample )
-			{
-				sec = (float)time / Current_.SampleRate;
 			}
 			else
 			{
@@ -320,10 +310,6 @@ public static class Music
 			else if( to == TimeUnitType.MSec )
 			{
 				return sec * 1000.0f;
-			}
-			else if( to == TimeUnitType.Sample )
-			{
-				return sec * Current_.SampleRate;
 			}
 			else
 			{
@@ -385,25 +371,13 @@ public abstract class MusicBase : MonoBehaviour
 	public int UnitPerBar { get { return currentMeter_.UnitPerBar; } }
 	public int UnitPerBeat { get { return currentMeter_.UnitPerBeat; } }
 	public double Tempo { get { return currentMeter_.Tempo; } }
-	public int SampleRate { get { return sampleRate_; } }
 
 	// from just
-	public double SecFromJust
-	{
-		get
-		{
-			if( isFormerHalf_ )
-				return samplesFromJust_ / sampleRate_;
-			else
-				return samplesFromJust_ / sampleRate_ - currentMeter_.SecPerUnit;
-		}
-	}
-	public double SecFromJustAbs { get { return Math.Abs(SecFromJust); } }
+	public double SecFromJust { get { return fractionFromJust_ * currentMeter_.SecPerUnit; } }
 	public double UnitFromJust { get { return SecFromJust / currentMeter_.SecPerUnit; } }
-	public double UnitFromJustAbs { get { return Math.Abs(UnitFromJust); } }
 
 	// total time / units
-	public float MusicalTime { get { return currentMeter_ != null ? currentMeter_.GetMusicalTime(just_, samplesFromJust_) : -1.0f; } }
+	public float MusicalTime { get { return currentMeter_ != null ? currentMeter_.GetMusicalTime(just_, fractionFromJust_) : -1.0f; } }
 	public int JustTotalUnits { get { return just_.GetTotalUnits(currentMeter_); } }
 	public int NearTotalUnits { get { return near_.GetTotalUnits(currentMeter_); } }
 	
@@ -568,17 +542,11 @@ public abstract class MusicBase : MonoBehaviour
 
 	protected abstract bool CheckFinishPlaying();
 
-	protected abstract void UpdateHorizontalState();
-
-	protected abstract void UpdateVerticalState();
-	
 	//timing
 
-	protected abstract int GetCurrentSample();
+	protected abstract void UpdateTimingInternal();
 
-	protected abstract int GetSampleRate();
-
-	protected abstract MusicMeter GetMeterFromSample(int currentSample);
+	protected abstract void CalcTimingAndFraction(ref Timing just, out float fraction);
 
 	protected abstract Timing GetSequenceEndTiming();
 
@@ -587,13 +555,11 @@ public abstract class MusicBase : MonoBehaviour
 
 	#region params
 
-	// 現在の曲のサンプルレート。
-	protected int sampleRate_ = 44100;
-	// 現在の再生サンプル数。
-	protected int currentSample_;
-
 	// 現在再生中の箇所のメーター情報。
-	private MusicMeter currentMeter_;
+	protected MusicMeter currentMeter_;
+	// 現在のシーケンス（横の遷移の単位）の小節数。
+	protected Timing sequenceEndTiming_ = null;
+
 	// 最新のJustタイミング。(タイミングちょうどになってから切り替わる）
 	private Timing just_ = new Timing(-1, 0, 0);
 	// 最新のNearタイミング。（最も近いタイミングが変わった地点、つまり2つのタイミングの中間で切り替わる）
@@ -612,12 +578,10 @@ public abstract class MusicBase : MonoBehaviour
 	private bool isNearLooped_ = false;
 	// 今がunit内の前半かどうか。 true なら just_ == near_, false なら ++just == near。
 	private bool isFormerHalf_;
-	// Justのタイミングから何サンプル過ぎているか。
-	private int samplesFromJust_;
+	// Justのタイミングから次のタイミングまでを0～1で表した小数。
+	private float fractionFromJust_;
 	// 現在のループカウント。
 	private int numRepeat_;
-	// 現在のシーケンス（横の遷移の単位）の小節数。
-	private Timing sequenceEndTiming_ = null;
 
 	#endregion
 
@@ -644,7 +608,7 @@ public abstract class MusicBase : MonoBehaviour
 	#if UNITY_EDITOR
 	void OnPlaymodeStateChanged(UnityEditor.PauseState state)
 	{
-		if( IsPlaying )
+		if( State == Music.PlayState.Playing || State == Music.PlayState.Suspended )
 		{
 			if( state == UnityEditor.PauseState.Paused )
 			{
@@ -684,15 +648,12 @@ public abstract class MusicBase : MonoBehaviour
 		if( ReadyInternal() )
 		{
 			State = Music.PlayState.Ready;
-			sampleRate_ = GetSampleRate();
-			currentMeter_ = GetMeterFromSample(0);
 			ResetParams();
 		}
 	}
 
 	void ResetParams()
 	{
-		currentSample_ = 0;
 		isJustChanged_ = false;
 		isNearChanged_ = false;
 		isJustLooped_ = false;
@@ -701,17 +662,17 @@ public abstract class MusicBase : MonoBehaviour
 		just_.Set(-1, 0, 0);
 		oldNear_.Set(near_);
 		oldJust_.Set(just_);
-		samplesFromJust_ = 0;
+		fractionFromJust_ = 0.0f;
 		isFormerHalf_ = true;
 		numRepeat_ = 0;
 		sequenceEndTiming_ = null;
+		currentMeter_ = null;
 
 		ResetParamsInternal();
 	}
 
 	void UpdateTiming()
 	{
-		int oldSample = currentSample_;
 		oldNear_.Set(near_);
 		oldJust_.Set(just_);
 		isNearChanged_ = false;
@@ -720,36 +681,18 @@ public abstract class MusicBase : MonoBehaviour
 		isNearLooped_ = false;
 
 		int oldSequenceIndex = SequenceIndex;
-		UpdateHorizontalState();
-		UpdateVerticalState();
+		UpdateTimingInternal();
+		CalcTimingAndFraction(ref just_, out fractionFromJust_);
 
-		currentSample_ = GetCurrentSample();
-		if( currentSample_ < 0 )
+		if( currentMeter_ != null )
 		{
-			return;
-		}
-
-		currentMeter_ = GetMeterFromSample(currentSample_);
-		if( currentMeter_ == null )
-		{
-			just_.Set(-1, 0, 0);
-		}
-		else
-		{
-			int meterSample = currentSample_ - currentMeter_.StartSamples;
-			int bar = (int)(meterSample / currentMeter_.SamplesPerBar);
-			int beat = (int)((meterSample - bar * currentMeter_.SamplesPerBar) / currentMeter_.SamplesPerBeat);
-			int unit = (int)(((meterSample - bar * currentMeter_.SamplesPerBar) - beat * currentMeter_.SamplesPerBeat) / currentMeter_.SamplesPerUnit);
-			just_.Set(bar + currentMeter_.StartBar, beat, unit);
-			just_.Fix(currentMeter_);
-
 			while( sequenceEndTiming_ != null && just_ >= sequenceEndTiming_ )
 			{
 				just_.Decrement(currentMeter_);
+				fractionFromJust_ = 1.0f;
 			}
 
-			samplesFromJust_ = currentSample_ - currentMeter_.GetSampleFromTiming(just_);
-			isFormerHalf_ = samplesFromJust_ < currentMeter_.SamplesPerUnit / 2;
+			isFormerHalf_ = fractionFromJust_ < 0.5f;
 
 			near_.Set(just_);
 			if( !isFormerHalf_ )
@@ -772,7 +715,7 @@ public abstract class MusicBase : MonoBehaviour
 				{
 					OnHorizontalSequenceChanged();
 				}
-				else
+				else if( SequenceIndex != -1 )
 				{
 					OnRepeated();
 				}

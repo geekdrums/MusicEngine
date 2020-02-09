@@ -116,6 +116,10 @@ public class MusicUnity : MusicBase
 
 	#region params
 
+	// samples
+	protected int sampleRate_ = 44100;
+	protected int currentSample_;
+
 	// sources
 	private AudioSource[] musicSources_;
 	private AudioSource[] transitionMusicSources_;
@@ -412,13 +416,12 @@ public class MusicUnity : MusicBase
 		ResetSectionClips();
 		ResetModeLayerVolumes();
 
-		ModeTransitionState = EModeTransitionState.Invalid;
-		TransitionState = ETransitionState.Invalid;
 		return true;
 	}
 
 	protected override void ResetParamsInternal()
 	{
+		currentSample_ = 0;
 		sectionIndex_ = 0;
 		nextSectionIndex_ = -1;
 		prevSectionIndex_ = -1;
@@ -428,32 +431,34 @@ public class MusicUnity : MusicBase
 		requestedModeIndex_ = -1;
 		endScheduledDSPTime_ = 0.0;
 		syncScheduledDSPTime_ = 0.0;
+		ModeTransitionState = EModeTransitionState.Invalid;
+		TransitionState = ETransitionState.Invalid;
 	}
-	
+
 	// timing
 
-	protected override int GetCurrentSample()
+	protected override void UpdateTimingInternal()
 	{
-		return musicSources_[0].timeSamples;
-	}
+		currentSample_ = musicSources_[0].timeSamples;
+		currentMeter_ = GetMeterFromSample(currentSample_);
 
-	protected override int GetSampleRate()
-	{
-		return Sections[0].Clips[0].frequency;
+		UpdateHorizontalState();
+		UpdateVerticalState();
 	}
-
-	protected override MusicMeter GetMeterFromSample(int currentSample)
+	
+	protected override void CalcTimingAndFraction(ref Timing just, out float fraction)
 	{
-		MusicMeter res = null;
-		foreach( MusicMeter meter in CurrentSection.Meters )
+		if( currentMeter_ == null )
 		{
-			if( currentSample < meter.StartSamples )
-			{
-				return res;
-			}
-			res = meter;
+			just.Set(-1, 0, 0);
+			fraction = 0;
 		}
-		return res;
+		else
+		{
+			MusicMeterBySample meter = currentMeter_ as MusicMeterBySample;
+			just.Set(meter.GetTimingFromSample(currentSample_));
+			fraction = (float)(currentSample_ - meter.GetSampleFromTiming(just)) / meter.SamplesPerUnit;
+		}
 	}
 
 	protected override Timing GetSequenceEndTiming()
@@ -492,21 +497,21 @@ public class MusicUnity : MusicBase
 		#endif
 	}
 
-	protected override void UpdateHorizontalState()
+	protected void UpdateHorizontalState()
 	{
 		int transitionCurrentSample;
 		
 		switch( TransitionState )
 		{
 			case ETransitionState.Intro:
-				if( AudioSettings.dspTime >= playedDSPTime_ && GetCurrentSample() > CurrentSection.EntryPointSample )
+				if( AudioSettings.dspTime >= playedDSPTime_ && currentSample_ > CurrentSection.EntryPointSample )
 				{
 					TransitionState = ETransitionState.Ready;
 					OnTransitionReady();
 				}
 				break;
 			case ETransitionState.Ready:
-				if( nextSectionIndex_ == -1 && GetCurrentSample() > CurrentSection.ExitPointSample )
+				if( nextSectionIndex_ == -1 && currentSample_ > CurrentSection.ExitPointSample )
 				{
 					TransitionState = ETransitionState.Outro;
 				}
@@ -606,9 +611,9 @@ public class MusicUnity : MusicBase
 		}
 	}
 
-	protected override void UpdateVerticalState()
+	protected void UpdateVerticalState()
 	{
-		int currentSample = GetCurrentSample();
+		int currentSample = currentSample_;
 
 		if( ModeTransitionState == EModeTransitionState.Sync )
 		{
@@ -796,11 +801,18 @@ public class MusicUnity : MusicBase
 		}
 		if( NumTracks < 1 )
 		{
-			NumTracks = 1;
+			return false;
 		}
+		if( Sections[0].Clips.Length == 0 )
+		{
+			return false;
+		}
+
+		sampleRate_ = Sections[0].Clips[0].frequency;
+
 		foreach( MusicSection section in Sections )
 		{
-			section.Validate();
+			section.Validate(sampleRate_);
 			if( section.IsValid == false )
 			{
 				return false;
@@ -1027,13 +1039,27 @@ public class MusicUnity : MusicBase
 			}
 		}
 	}
-	
-	// sync
 
-	MusicMeter GetMeterFromTiming(Timing timing)
+	// sync
+	
+	MusicMeterBySample GetMeterFromSample(int sample)
 	{
-		MusicMeter res = null;
-		foreach( MusicMeter meter in CurrentSection.Meters )
+		MusicMeterBySample res = null;
+		foreach( MusicMeterBySample meter in CurrentSection.Meters )
+		{
+			if( sample < meter.StartSamples )
+			{
+				return res;
+			}
+			res = meter;
+		}
+		return res;
+	}
+
+	MusicMeterBySample GetMeterFromTiming(Timing timing)
+	{
+		MusicMeterBySample res = null;
+		foreach( MusicMeterBySample meter in CurrentSection.Meters )
 		{
 			if( timing.Bar < meter.StartBar )
 			{
@@ -1048,7 +1074,7 @@ public class MusicUnity : MusicBase
 	{
 		syncPointSample = currentSample;
 
-		MusicMeter currentMeter = GetMeterFromSample(currentSample);
+		MusicMeterBySample currentMeter = GetMeterFromSample(currentSample);
 		Timing currentTiming = currentMeter != null ? currentMeter.GetTimingFromSample(currentSample) : new Timing();
 		Timing syncPointCandidateTiming = new Timing(currentTiming);
 
@@ -1142,7 +1168,7 @@ public class MusicUnity : MusicBase
 
 	void SetNextLoop()
 	{
-		syncScheduledDSPTime_ = AudioSettings.dspTime + (double)(CurrentSection.LoopEndSample - GetCurrentSample()) / sampleRate_;
+		syncScheduledDSPTime_ = AudioSettings.dspTime + (double)(CurrentSection.LoopEndSample - currentSample_) / sampleRate_;
 		endScheduledDSPTime_ = syncScheduledDSPTime_;
 		for( int i = 0; i < NumTracks; ++i )
 		{
@@ -1172,7 +1198,7 @@ public class MusicUnity : MusicBase
 		// 遷移タイミング計算
 		MusicSection requestedSection = Sections[param.SectionIndex];
 		int entryPointSample = requestedSection.EntryPointSample;
-		int currentSample = GetCurrentSample();
+		int currentSample = currentSample_;
 		int syncPointSample = 0;
 		if( FindSyncPoint(param.SyncType, param.SyncFactor, currentSample, entryPointSample, out syncPointSample) == false )
 		{
@@ -1264,7 +1290,7 @@ public class MusicUnity : MusicBase
 	{
 		if( endScheduledDSPTime_ > 0.0 )
 		{
-			endScheduledDSPTime_ = AudioSettings.dspTime + (double)(musicSources_[0].clip.samples - GetCurrentSample()) / sampleRate_;
+			endScheduledDSPTime_ = AudioSettings.dspTime + (double)(musicSources_[0].clip.samples - currentSample_) / sampleRate_;
 			for( int i = 0; i < NumTracks; ++i )
 			{
 				if( musicSources_[i].clip != null )
@@ -1309,7 +1335,7 @@ public class MusicUnity : MusicBase
 		}
 
 		// 遷移タイミング計算
-		int currentSample = GetCurrentSample();
+		int currentSample = currentSample_;
 		int fadeOffsetSample = param.SyncType == Music.SyncType.Immediate ? 0 : (int)(param.FadeOffsetSec * sampleRate_);
 		int entryPointSample = Math.Max(-fadeOffsetSample, 0);
 		int syncPointSample = 0;

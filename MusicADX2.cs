@@ -58,6 +58,7 @@ public class MusicADX2 : MusicBase
 		public int StartBar = 0;
 	}
 
+	private int currentMSec_;
 	private int currentBlockIndex_;
 	private int nextBlockIndex_;
 	private int prevBlockIndex_;
@@ -70,16 +71,6 @@ public class MusicADX2 : MusicBase
 	public BlockInfo NextBlock { get { return BlockInfos[nextBlockIndex_]; } }
 	public override int SequenceIndex { get { return currentBlockIndex_; } }
 	public override string SequenceName { get { return BlockInfos[currentBlockIndex_].BlockName; } }
-
-	#endregion
-
-
-	#region unity functions
-
-	void OnValidate()
-	{
-		Meter.OnValidate(SampleRate);
-	}
 
 	#endregion
 
@@ -98,16 +89,33 @@ public class MusicADX2 : MusicBase
 		}
 		acbData_ = CriAtom.GetAcb(atomSource_.cueSheet);
 		acbData_.GetCueInfo(atomSource_.cueName, out cueInfo_);
-		Meter.OnValidate(sampleRate_);
+		Meter.Validate(0);
 		return true;
 	}
 
 	protected override void SeekInternal(int sequenceIndex, Timing seekTiming)
 	{
+		// ResetTimingOnEachBlockがfalseの時は、タイミングがブロックごとではなく
+		// 全体で一つのものと判断されるので、sequenceIndex引数は無視されます。
+		if( ResetTimingOnEachBlock == false )
+		{
+			sequenceIndex = BlockInfos.Count - 1;
+			for( int i = 1; i < BlockInfos.Count; ++i )
+			{
+				if( seekTiming.Bar < BlockInfos[i].StartBar )
+				{
+					sequenceIndex = i - 1;
+					break;
+				}
+			}
+
+			seekTiming = new Timing(seekTiming.Bar - BlockInfos[sequenceIndex].StartBar, seekTiming.Beat, seekTiming.Unit);
+		}
+
 		nextBlockIndex_ = sequenceIndex;
 		currentBlockIndex_ = sequenceIndex;
 		atomSource_.player.SetFirstBlockIndex(sequenceIndex);
-		atomSource_.startTime = (int)(((float)Meter.GetSampleFromTiming(seekTiming) / SampleRate) * 1000.0f);
+		atomSource_.startTime = (int)Meter.GetMilliSecondsFromTiming(seekTiming);
 	}
 
 	protected override bool PlayInternal()
@@ -140,37 +148,38 @@ public class MusicADX2 : MusicBase
 		currentBlockIndex_ = 0;
 		prevBlockIndex_ = 0;
 		nextBlockIndex_ = 0;
+		currentMeter_ = Meter;
 	}
-	
+
 	// timing
 
-	protected override int GetCurrentSample()
+	protected override void UpdateTimingInternal()
 	{
-		if( atomSource_.status == CriAtomSource.Status.Playing )
+		double startMSec = 0.0;
+		if( ResetTimingOnEachBlock )
 		{
-			int startSample = 0;
-			if( ResetTimingOnEachBlock )
-			{
-				startSample = (int)(Meter.SecPerBar * CurrentBlock.StartBar * sampleRate_);
-			}
-
-			// playback_.GetNumPlayedSamplesは、見つかった最初の波形のサンプル数を返してしまうため、
-			// 遷移時に残っていた前のブロックの波形を取ってきてしまうことがあるので、
-			// ミリ秒制度だがGetSequencePositionに変更した。
-			return Math.Max(0, (int)((playback_.GetSequencePosition() / 1000.0) * sampleRate_) - startSample);
+			prevBlockIndex_ = currentBlockIndex_;
+			currentBlockIndex_ = playback_.GetCurrentBlockIndex();
+			startMSec = Meter.MSecPerBar * CurrentBlock.StartBar;
 		}
-		return -1;
+
+		// playback_.GetNumPlayedSamplesは、見つかった最初の波形のサンプル数を返してしまい、
+		// 遷移時に残っていた前のブロックの波形を取ってきてしまうことがあるので断念。
+		currentMSec_ = Math.Max(0, (int)playback_.GetSequencePosition() - (int)startMSec);
 	}
 
-	protected override int GetSampleRate()
+	protected override void CalcTimingAndFraction(ref Timing just, out float fraction)
 	{
-		// GetNumPlayedSamplesを使ってないので実質的にサンプルレートは関係ない。
-		return 44100;
-	}
-
-	protected override MusicMeter GetMeterFromSample(int currentSample)
-	{
-		return Meter;
+		if( currentMeter_ == null )
+		{
+			just.Set(-1, 0, 0);
+			fraction = 0;
+		}
+		else
+		{
+			just.Set(currentMeter_.GetTimingFromMilliSeconds(currentMSec_));
+			fraction = (float)((currentMSec_ - currentMeter_.GetMilliSecondsFromTiming(just)) / currentMeter_.MSecPerUnit);
+		}
 	}
 
 	protected override Timing GetSequenceEndTiming()
@@ -190,17 +199,6 @@ public class MusicADX2 : MusicBase
 	}
 
 	protected override void UpdateInternal()
-	{
-
-	}
-
-	protected override void UpdateHorizontalState()
-	{
-		prevBlockIndex_ = currentBlockIndex_;
-		currentBlockIndex_ = playback_.GetCurrentBlockIndex();
-	}
-
-	protected override void UpdateVerticalState()
 	{
 
 	}
@@ -292,6 +290,11 @@ public class MusicADX2 : MusicBase
 
 	#region utils
 
+	void OnValidate()
+	{
+		Meter.Validate(0);
+	}
+
 	public static void UpdateBlockInfo(string outputAssetsRoot)
 	{
 		string[] acbInfoFileList = System.IO.Directory.GetFiles(outputAssetsRoot.Replace("/Assets", ""), "*_acb_info.xml", System.IO.SearchOption.AllDirectories);
@@ -329,7 +332,7 @@ public class MusicADX2 : MusicBase
 	void LoadAcbInfoData(XmlReader reader, double Bpm)
 	{
 		Meter.Tempo = Bpm;
-		Meter.OnValidate(SampleRate);
+		Meter.Validate(0);
 		BlockInfos = new List<BlockInfo>();
 		int startBar = 0;
 		while( reader.Read() )

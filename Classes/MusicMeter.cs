@@ -13,13 +13,21 @@ public class MusicMeter
 	public int Numerator = 4;
 	public int Denominator = 4;
 
-	public int StartSamples { get; private set; }
-	public int SamplesPerUnit { get; private set; }
-	public int SamplesPerBeat { get; private set; }
-	public int SamplesPerBar { get; private set; }
-	public double SecPerBar { get; private set; }
-	public double SecPerBeat { get; private set; }
-	public double SecPerUnit { get; private set; }
+
+	#region properties
+
+	public double StartSec { get; protected set; }
+	public double SecPerBar { get; protected set; }
+	public double SecPerBeat { get; protected set; }
+	public double SecPerUnit { get; protected set; }
+
+	public double StartMSec { get; protected set; }
+	public double MSecPerBar { get; protected set; }
+	public double MSecPerBeat { get; protected set; }
+	public double MSecPerUnit { get; protected set; }
+
+	#endregion
+
 
 	public MusicMeter(int startBar, int unitPerBeat = 4, int unitPerBar = 16, double tempo = 120)
 	{
@@ -31,6 +39,14 @@ public class MusicMeter
 
 		CalcMeterByUnits(UnitPerBeat, UnitPerBar, out Numerator, out Denominator);
 	}
+	
+	public override string ToString()
+	{
+		return string.Format("({0}/{1}, {2:F2})", Numerator, Denominator, Tempo);
+	}
+
+
+	#region validate
 
 	public static void CalcMeterByUnits(int unitPerBeat, int unitPerBar, out int numerator, out int denominator)
 	{
@@ -59,24 +75,90 @@ public class MusicMeter
 			return small;
 		return Euclid(big % small, small);
 	}
-
-	public void OnValidate(int samplingRate = 44100, int startTimeSample = 0)
+	
+	public void Validate(double startSec)
 	{
-		StartSamples = startTimeSample;
+		StartSec = startSec;
+		SecPerBeat = (60.0 / Tempo);
+		SecPerUnit = SecPerBeat / UnitPerBeat;
+		SecPerBar = UnitPerBar * (SecPerBeat / UnitPerBeat);
 
-		double beatSec = (60.0 / Tempo);
-		SamplesPerUnit = (int)(samplingRate * (beatSec / UnitPerBeat));
-		SamplesPerBeat = (int)(samplingRate * beatSec);
-		SamplesPerBar = (int)(samplingRate * UnitPerBar * (beatSec / UnitPerBeat));
-		SecPerUnit = (double)SamplesPerUnit / (double)samplingRate;
-		SecPerBeat = (double)SamplesPerBeat / (double)samplingRate;
-		SecPerBar = (double)SamplesPerBar / (double)samplingRate;
+		StartMSec = StartSec * 1000.0;
+		MSecPerBeat = SecPerBeat * 1000.0;
+		MSecPerUnit = SecPerUnit * 1000.0;
+		MSecPerBar = SecPerBar * 1000.0;
 	}
 
-	public float GetMusicalTime(Timing just, int samplesFromJust)
+	#endregion
+
+
+	#region convert
+
+	public float GetMusicalTime(Timing just, float fractionFromJust)
 	{
-		float barUnit = (float)(just.Beat * UnitPerBeat + just.Unit + (float)samplesFromJust / SamplesPerUnit);
-		return (float)just.Bar + Mathf.Min(1.0f, barUnit / UnitPerBar);
+		return (just.GetTotalUnits(this) + fractionFromJust) / UnitPerBar;
+	}
+	
+	public double GetSecondsFromTiming(Timing timing)
+	{
+		return StartSec + (timing.Bar - StartBar) * SecPerBar + timing.Beat * SecPerBeat + timing.Unit * SecPerUnit;
+	}
+
+	public double GetMilliSecondsFromTiming(Timing timing)
+	{
+		return StartMSec + (timing.Bar - StartBar) * MSecPerBar + timing.Beat * MSecPerBeat + timing.Unit * MSecPerUnit;
+	}
+
+	public Timing GetTimingFromSeconds(double sec)
+	{
+		if( sec < StartSec )
+		{
+			return new Timing(StartBar);
+		}
+		else
+		{
+			double meterSec = sec - StartSec;
+			int bar = (int)(meterSec / SecPerBar);
+			int beat = (int)((meterSec - bar * SecPerBar) / SecPerBeat);
+			int unit = (int)(((meterSec - bar * SecPerBar) - beat * SecPerBeat) / SecPerUnit);
+			return new Timing(bar + StartBar, beat, unit);
+		}
+	}
+
+	public Timing GetTimingFromMilliSeconds(double msec)
+	{
+		return GetTimingFromSeconds(msec/1000.0);
+	}
+
+	#endregion
+
+}
+
+[Serializable]
+public class MusicMeterBySample : MusicMeter
+{
+	public MusicMeterBySample(int startBar, int unitPerBeat = 4, int unitPerBar = 16, double tempo = 120)
+		: base(startBar, unitPerBeat, unitPerBar, tempo)
+	{
+
+	}
+
+	public int SampleRate { get; protected set; }
+	public int StartSamples { get; protected set; }
+	public int SamplesPerUnit { get; protected set; }
+	public int SamplesPerBeat { get; protected set; }
+	public int SamplesPerBar { get; protected set; }
+
+	public void OnValidate(int sampleRate = 44100, int startTimeSample = 0)
+	{
+		SampleRate = sampleRate;
+
+		Validate((double)startTimeSample / SampleRate);
+
+		StartSamples = startTimeSample;
+		SamplesPerBeat = (int)(SampleRate * SecPerBeat);
+		SamplesPerUnit = (int)(SampleRate * (SecPerBeat / UnitPerBeat));
+		SamplesPerBar = (int)(SampleRate * UnitPerBar * (SecPerBeat / UnitPerBeat));
 	}
 
 	public int GetSampleFromTiming(Timing timing)
@@ -98,11 +180,5 @@ public class MusicMeter
 			int unit = (int)(((meterSamples - bar * SamplesPerBar) - beat * SamplesPerBeat) / SamplesPerUnit);
 			return new Timing(bar + StartBar, beat, unit);
 		}
-	}
-
-	
-	public override string ToString()
-	{
-		return string.Format("({0}/{1}, {2:F2})", Numerator, Denominator, Tempo);
 	}
 }

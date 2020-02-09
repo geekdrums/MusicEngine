@@ -105,9 +105,10 @@ public class Timing : IComparable<Timing>, IEquatable<Timing>
 	}
 	public static bool operator !=(Timing t, Timing t2) { return !(t == t2); }
 	public static bool operator >(Timing t, Timing t2) { return t.Bar > t2.Bar || (t.Bar == t2.Bar && t.Beat > t2.Beat) || (t.Bar == t2.Bar && t.Beat == t2.Beat && t.Unit > t2.Unit); }
-	public static bool operator <(Timing t, Timing t2) { return !(t > t2) && !(t.Equals(t2)); }
+	public static bool operator <(Timing t, Timing t2) { return !(t > t2) && !(t == t2); }
 	public static bool operator <=(Timing t, Timing t2) { return !(t > t2); }
 	public static bool operator >=(Timing t, Timing t2) { return !(t < t2); }
+	public static Timing Zero = new Timing(0);
 
 	public override bool Equals(object obj)
 	{
