@@ -181,8 +181,8 @@ public class MusicUnityEditor : Editor
 		if( showOptions_ )
 		{
 			EditorGUI.indentLevel++;
-			showHelpTexts_ = EditorGUILayout.Toggle("Show Help", showHelpTexts_);
-			showUnitPerBarBeat_ = EditorGUILayout.Toggle("Show In UnitPerBeat/Bar", showUnitPerBarBeat_);
+			//showHelpTexts_ = EditorGUILayout.Toggle("Show Help", showHelpTexts_);
+			showUnitPerBarBeat_ = EditorGUILayout.Toggle("Show Meters in UnitPerBeat/Bar", showUnitPerBarBeat_);
 			EditorGUI.indentLevel--;
 		}
 		
@@ -397,7 +397,6 @@ public class MusicUnityEditor : Editor
 					EditorGUILayout.LabelField("Meter", GUILayout.Width(EditorGUIUtility.labelWidth - 4));
 					EditorGUIUtility.labelWidth = 1;
 					EditorGUILayout.PropertyField(numeratorProp, GUILayout.Width(55));
-					EditorGUIUtility.labelWidth = 30;
 					denominatorProp.intValue = EditorGUILayout.IntPopup("/", denominatorProp.intValue, MeterDenominatorCandidatesString, MeterDenominatorCandidates);
 					EditorGUIUtility.labelWidth = 0;
 

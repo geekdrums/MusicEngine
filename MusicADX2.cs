@@ -93,7 +93,7 @@ public class MusicADX2 : MusicBase
 		return true;
 	}
 
-	protected override void SeekInternal(int sequenceIndex, Timing seekTiming)
+	protected override void SeekInternal(Timing seekTiming, int sequenceIndex = 0)
 	{
 		// ResetTimingOnEachBlockがfalseの時は、タイミングがブロックごとではなく
 		// 全体で一つのものと判断されるので、sequenceIndex引数は無視されます。

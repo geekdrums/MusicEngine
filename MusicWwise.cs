@@ -1,4 +1,4 @@
-#define Wwise
+//#define Wwise
 #if Wwise
 
 using System;
@@ -9,7 +9,7 @@ using System.Xml;
 
 public class MusicWwise : MusicBase
 {
-#region editor params
+	#region editor params
 
 	public AK.Wwise.Event Event;
 
@@ -27,10 +27,10 @@ public class MusicWwise : MusicBase
 	[Tooltip("Seek時に利用される。通常再生時はMeter情報は再生中に自動取得されるので不要です。")]
 	public MusicMeter DefaultMeter = new MusicMeter(0);
 
-#endregion
+	#endregion
 
 
-#region params
+	#region params
 
 	private int currentMSec_;
 	private int sequenceEndBar_;
@@ -52,10 +52,10 @@ public class MusicWwise : MusicBase
 	}
 	public ETransitionState TransitionState { get; private set; } = ETransitionState.Invalid;
 
-#endregion
+	#endregion
 
 
-#region override functions
+	#region override functions
 
 	// internal
 
@@ -69,7 +69,7 @@ public class MusicWwise : MusicBase
 		return false;
 	}
 
-	protected override void SeekInternal(int sequenceIndex, Timing seekTiming)
+	protected override void SeekInternal(Timing seekTiming, int sequenceIndex = 0)
 	{
 		seekTiming_ = seekTiming;
 	}
@@ -221,10 +221,10 @@ public class MusicWwise : MusicBase
 		print("SetVerticalMixByIndex is not implemented in MusicWwise");
 	}
 
-#endregion
+	#endregion
 
 
-#region callback / utils
+	#region callback / utils
 
 	void AkEventCallback(object in_cookie, AkCallbackType in_type, AkCallbackInfo in_info)
 	{
@@ -256,7 +256,7 @@ public class MusicWwise : MusicBase
 		currentMeter_.Validate(0);
 	}
 
-#endregion
+	#endregion
 }
 
 #endif

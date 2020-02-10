@@ -278,7 +278,7 @@ public class MusicUnity : MusicBase
 		return false;
 	}
 
-	protected override void SeekInternal(int sequenceIndex, Timing seekTiming)
+	protected override void SeekInternal(Timing seekTiming, int sequenceIndex = 0)
 	{
 		sectionIndex_ = sequenceIndex;
 		int seekSample = CurrentSection.GetSampleFromTiming(seekTiming);
@@ -301,7 +301,7 @@ public class MusicUnity : MusicBase
 		#if UNITY_EDITOR
 		if( PreviewSectionIndex != sectionIndex_ || SeekBar >= 0 )
 		{
-			SeekInternal(PreviewSectionIndex, new Timing(SeekBar));
+			SeekInternal(new Timing(SeekBar), PreviewSectionIndex);
 		}
 		if( PreviewModeIndex != modeIndex_ )
 		{

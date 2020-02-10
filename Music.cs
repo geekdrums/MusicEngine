@@ -1,4 +1,4 @@
-//Copyright (c) 2019 geekdrums
+//Copyright (c) 2020 geekdrums
 //Released under the MIT license
 //http://opensource.org/licenses/mit-license.php
 //Feel free to use this for your lovely musical games :)
@@ -9,69 +9,81 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
+/// <summary>
+/// Static access to currently playing music.
+/// Music.Play will set and change current instance.
+/// </summary>
 public static class Music
 {
-	#region static properties
+	#region properties
+	
+	// current music & state
 
-	public static MusicBase Current { get { return Current_; } }
+	public static MusicBase Current { get { return current_; } }
+	public static string CurrentMusicName { get { return current_ != null ? current_.name : ""; } }
+	public static bool IsPlaying { get { return current_ != null ? current_.IsPlaying : false; } }
+	public static bool IsPlayingOrSuspended { get { return current_ != null ? current_.IsPlayingOrSuspended : false; } }
+	public static PlayState State { get { return current_ != null ? current_.State : PlayState.Invalid; } }
+	
+	// current timing
 
-	public static bool IsPlaying { get { return Current_.IsPlaying; } }
 	/// <summary>
-	/// means last timing.
+	/// Last timing.
 	/// </summary>
-	public static Timing Just { get { return Current_.Just; } }
+	public static Timing Just { get { return current_ != null ? current_.Just : null; } }
 	/// <summary>
-	/// means nearest timing.
+	/// Nearest timing.
 	/// </summary>
-	public static Timing Near { get { return Current_.Near; } }
+	public static Timing Near { get { return current_ != null ? current_.Near : null; } }
 	/// <summary>
 	/// is Just changed in this frame or not.
 	/// </summary>
-	public static bool IsJustChanged { get { return Current_.IsJustChanged; } }
+	public static bool IsJustChanged { get { return current_ != null ? current_.IsJustChanged : false; } }
 	/// <summary>
 	/// is Near changed in this frame or not.
 	/// </summary>
-	public static bool IsNearChanged { get { return Current_.IsNearChanged; } }
+	public static bool IsNearChanged { get { return current_ != null ? current_.IsNearChanged : false; } }
 	/// <summary>
 	/// is currently former half in a MusicTimeUnit, or last half.
 	/// </summary>
-	public static bool IsFormerHalf { get { return Current_.IsFormerHalf; } }
-	/// <summary>
-	/// how many times you repeat current music/block.
-	/// </summary>
-	public static int NumRepeat { get { return Current_.NumRepeat; } }
+	public static bool IsFormerHalf { get { return current_ != null ? current_.IsFormerHalf : false; } }
 	/// <summary>
 	/// returns sec from last Just timing.
 	/// </summary>
-	public static double SecFromJust { get { return Current_.SecFromJust; } }
+	public static double SecFromJust { get { return current_ != null ? current_.SecFromJust : 0; } }
 	/// <summary>
 	/// returns normalized time (0 to 1) from last Just timing.
 	/// </summary>
-	public static double UnitFromJust { get { return Current_.UnitFromJust; } }
+	public static double UnitFromJust { get { return current_ != null ? current_.UnitFromJust : 0; } }
 	
-	public static bool HasValidMeter { get { return Current_ != null && Current_.CurrentMeter != null; } }
-	public static MusicMeter CurrentMeter { get { return Current_.CurrentMeter; } }
-	public static int CurrentUnitPerBar { get { return Current_.CurrentMeter.UnitPerBar; } }
-	public static int CurrentUnitPerBeat { get { return Current_.CurrentMeter.UnitPerBeat; } }
-	public static double CurrentTempo { get { return Current_.CurrentMeter.Tempo; } }
+	// current meter
 
-	public static string CurrentMusicName { get { return Current_.name; } }
-	public static string CurrentSequenceName { get { return Current_.SequenceName; } }
-	public static int CurrentSequenceIndex { get { return Current_.SequenceIndex; } }
+	public static bool HasValidMeter { get { return current_ != null && current_.CurrentMeter != null; } }
+	public static MusicMeter CurrentMeter { get { return current_ != null ? current_.CurrentMeter : null; } }
+	public static double CurrentTempo { get { return current_ != null ? current_.CurrentMeter.Tempo : 0; } }
+	public static int CurrentUnitPerBar { get { return current_ != null ? current_.CurrentMeter.UnitPerBar : 0; } }
+	public static int CurrentUnitPerBeat { get { return current_ != null ? current_.CurrentMeter.UnitPerBeat : 0; } }
+	
+	// current sequence
 
-	/// <summary>
-	/// current musical time in units
-	/// </summary>
-	public static int JustTotalUnits { get { return Current_.JustTotalUnits; } }
-	/// <summary>
-	/// current musical time in units
-	/// </summary>
-	public static int NearTotalUnits { get { return Current_.NearTotalUnits; } }
+	public static string CurrentSequenceName { get { return current_ != null ? current_.SequenceName : ""; } }
+	public static int CurrentSequenceIndex { get { return current_ != null ? current_.SequenceIndex : 0; } }
+	public static int NumRepeat { get { return current_ != null ? current_.NumRepeat : 0; } }
+	
+	// musical time
+
 	/// <summary>
 	/// current musical time in bars
 	/// </summary>
-	public static float MusicalTime { get { return Current_.MusicalTime; } }
-
+	public static float MusicalTime { get { return current_ != null ? current_.MusicalTime : 0 ; } }
+	/// <summary>
+	/// current musical time in units
+	/// </summary>
+	public static int JustTotalUnits { get { return current_ != null ? current_.JustTotalUnits : 0; } }
+	/// <summary>
+	/// current musical time in units
+	/// </summary>
+	public static int NearTotalUnits { get { return current_ != null ? current_.NearTotalUnits : 0; } }
 	/// <summary>
 	/// returns musically synced cos wave.
 	/// if default( MusicalCos(16,0,0,1),
@@ -92,130 +104,136 @@ public static class Music
 	#endregion
 
 
-	#region static predicates
+	#region just / near changed predicates
+
+	// just changed
 
 	public static bool IsJustChangedWhen(Predicate<Timing> pred)
 	{
-		return Current_.IsJustChangedWhen(pred);
+		return current_ != null ? current_.IsJustChangedWhen(pred) : false;
 	}
 	public static bool IsJustChangedBar()
 	{
-		return Current_.IsJustChangedBar();
+		return current_ != null ? current_.IsJustChangedBar() : false;
 	}
 	public static bool IsJustChangedBeat()
 	{
-		return Current_.IsJustChangedBeat();
+		return current_ != null ? current_.IsJustChangedBeat() : false;
 	}
 	public static bool IsJustChangedAt(int bar = 0, int beat = 0, int unit = 0)
 	{
-		return Current_.IsJustChangedAt(bar, beat, unit);
+		return current_ != null ? current_.IsJustChangedAt(bar, beat, unit) : false;
 	}
 	public static bool IsJustChangedAt(Timing t)
 	{
-		return Current_.IsJustChangedAt(t.Bar, t.Beat, t.Unit);
+		return current_ != null ? current_.IsJustChangedAt(t.Bar, t.Beat, t.Unit) : false;
 	}
+
+	// near changed
 
 	public static bool IsNearChangedWhen(Predicate<Timing> pred)
 	{
-		return Current_.IsNearChangedWhen(pred);
+		return current_ != null ? current_.IsNearChangedWhen(pred) : false;
 	}
 	public static bool IsNearChangedBar()
 	{
-		return Current_.IsNearChangedBar();
+		return current_ != null ? current_.IsNearChangedBar() : false;
 	}
 	public static bool IsNearChangedBeat()
 	{
-		return Current_.IsNearChangedBeat();
+		return current_ != null ? current_.IsNearChangedBeat() : false;
 	}
 	public static bool IsNearChangedAt(int bar, int beat = 0, int unit = 0)
 	{
-		return Current_.IsNearChangedAt(bar, beat, unit);
+		return current_ != null ? current_.IsNearChangedAt(bar, beat, unit) : false;
 	}
 	public static bool IsNearChangedAt(Timing t)
 	{
-		return Current_.IsNearChangedAt(t.Bar, t.Beat, t.Unit);
+		return current_ != null ? current_.IsNearChangedAt(t.Bar, t.Beat, t.Unit) : false;
 	}
 
 	#endregion
 
 
-	#region static functions
+	#region play / stop / suspend / resume
 
 	/// <summary>
-	/// Change Current Music.
+	/// Change current music and play.
 	/// </summary>
 	/// <param name="musicName">name of the GameObject that include Music</param>
 	public static void Play(string musicName)
 	{
-		MusicBase music = MusicList_.Find((MusicBase m) => m != null && m.name == musicName);
+		MusicBase music = musicList_.Find((MusicBase m) => m != null && m.name == musicName);
 		if( music != null )
 		{
-			Play(music);
+			music.Play();
 		}
 		else
 		{
 			Debug.Log("Can't find music: " + musicName);
 		}
 	}
-
-	public static void Play(MusicBase music)
+	public static void PlayFrom(string musicName, Timing seekTiming, int sequenceIndex = 0)
 	{
-		if( Current_ != null && Current_.IsPlaying )
-		{
-			Current_.Stop();
-		}
-
-		music.Play();
-	}
-
-	public static void PlayFrom(string musicName, int sequenceIndex, Timing seekTiming)
-	{
-		MusicBase music = MusicList_.Find((MusicBase m) => m != null && m.name == musicName);
+		MusicBase music = musicList_.Find((MusicBase m) => m != null && m.name == musicName);
 		if( music != null )
 		{
-			music.PlayFrom(sequenceIndex, seekTiming);
+			music.Seek(seekTiming, sequenceIndex);
+			music.Play();
 		}
 		else
 		{
 			Debug.Log("Can't find music: " + musicName);
 		}
 	}
-
-	public static void PlayFrom(MusicBase music, int sequenceIndex, Timing seekTiming)
-	{
-		music.PlayFrom(sequenceIndex, seekTiming);
-	}
-
-	public static void Suspend() { Current_.Suspend(); }
-	public static void Resume() { Current_.Resume(); }
-	public static void Stop() { Current_.Stop(); }
+	public static void Suspend() { current_?.Suspend(); }
+	public static void Resume() { current_?.Resume(); }
+	public static void Stop() { current_?.Stop(); }
 
 	#endregion
 
 
-	#region static params
+	#region interactive music
 
-	static MusicBase Current_;
-	static List<MusicBase> MusicList_ = new List<MusicBase>();
+	public static void SetHorizontalSequence(string name) { current_?.SetHorizontalSequence(name); }
+
+	public static void SetHorizontalSequenceByIndex(int index) { current_?.SetHorizontalSequenceByIndex(index); }
+
+	public static void SetVerticalMix(string name) { current_?.SetVerticalMix(name); }
+
+	public static void SetVerticalMixByIndex(int index) { current_?.SetVerticalMixByIndex(index); }
+
+	#endregion
+
+
+	#region params
+
+	static MusicBase current_;
+	static List<MusicBase> musicList_ = new List<MusicBase>();
+
+	public static void RegisterMusic(MusicBase music)
+	{
+		if( musicList_.Contains(music) == false )
+		{
+			musicList_.Add(music);
+		}
+	}
 
 	public static void OnPlay(MusicBase music)
 	{
-		Current_ = music;
+		if( current_ != null && current_ != music && current_.IsPlaying )
+		{
+			current_.Stop();
+		}
+
+		current_ = music;
 	}
 
 	public static void OnFinish(MusicBase music)
 	{
-		if( Current_ == music )
+		if( current_ == music )
 		{
-			Current_ = null;
-		}
-	}
-
-	public static void RegisterMusic(MusicBase music)
-	{
-		if( MusicList_.Contains(music) == false )
-		{
-			MusicList_.Add(music);
+			current_ = null;
 		}
 	}
 
@@ -276,13 +294,13 @@ public static class Music
 					switch( from )
 					{
 						case TimeUnitType.Bar:
-							sec = time * (float)Current_.CurrentMeter.SecPerBar;
+							sec = time * (float)current_.CurrentMeter.SecPerBar;
 							break;
 						case TimeUnitType.Beat:
-							sec = time * (float)Current_.CurrentMeter.SecPerBeat;
+							sec = time * (float)current_.CurrentMeter.SecPerBeat;
 							break;
 						case TimeUnitType.Unit:
-							sec = time * (float)Current_.CurrentMeter.SecPerUnit;
+							sec = time * (float)current_.CurrentMeter.SecPerUnit;
 							break;
 					}
 				}
@@ -318,11 +336,11 @@ public static class Music
 					switch( to )
 					{
 						case TimeUnitType.Bar:
-							return sec / (float)Current_.CurrentMeter.SecPerBar;
+							return sec / (float)current_.CurrentMeter.SecPerBar;
 						case TimeUnitType.Beat:
-							return sec / (float)Current_.CurrentMeter.SecPerBeat;
+							return sec / (float)current_.CurrentMeter.SecPerBeat;
 						case TimeUnitType.Unit:
-							return sec / (float)Current_.CurrentMeter.SecPerUnit;
+							return sec / (float)current_.CurrentMeter.SecPerUnit;
 					}
 				}
 				else
@@ -347,6 +365,9 @@ public static class Music
 	#endregion
 }
 
+/// <summary>
+/// base class for MusicUnity / MusicADX2 / MusicWwise
+/// </summary>
 public abstract class MusicBase : MonoBehaviour
 {
 	#region properties
@@ -357,6 +378,7 @@ public abstract class MusicBase : MonoBehaviour
 	// state
 	public Music.PlayState State { get; private set; } = Music.PlayState.Invalid;
 	public bool IsPlaying { get { return State == Music.PlayState.Playing; } }
+	public bool IsPlayingOrSuspended { get { return State == Music.PlayState.Playing || State == Music.PlayState.Suspended; } }
 
 	// timing
 	public Timing Just { get { return just_; } }
@@ -364,20 +386,18 @@ public abstract class MusicBase : MonoBehaviour
 	public bool IsJustChanged { get { return isJustChanged_; } }
 	public bool IsNearChanged { get { return isNearChanged_; } }
 	public bool IsFormerHalf { get { return isFormerHalf_; } }
+	public double SecFromJust { get { return fractionFromJust_ * currentMeter_.SecPerUnit; } }
+	public double UnitFromJust { get { return SecFromJust / currentMeter_.SecPerUnit; } }
 
 	// meter
 	public bool HasValidMeter { get { return currentMeter_ != null; } }
 	public MusicMeter CurrentMeter { get { return currentMeter_; } }
+	public double Tempo { get { return currentMeter_.Tempo; } }
 	public int UnitPerBar { get { return currentMeter_.UnitPerBar; } }
 	public int UnitPerBeat { get { return currentMeter_.UnitPerBeat; } }
-	public double Tempo { get { return currentMeter_.Tempo; } }
-
-	// from just
-	public double SecFromJust { get { return fractionFromJust_ * currentMeter_.SecPerUnit; } }
-	public double UnitFromJust { get { return SecFromJust / currentMeter_.SecPerUnit; } }
-
-	// total time / units
-	public float MusicalTime { get { return currentMeter_ != null ? currentMeter_.GetMusicalTime(just_, fractionFromJust_) : -1.0f; } }
+	
+	// musical time
+	public float MusicalTime { get { return currentMeter_ != null ? currentMeter_.GetMusicalTime(just_, fractionFromJust_) : 0.0f; } }
 	public int JustTotalUnits { get { return just_.GetTotalUnits(currentMeter_); } }
 	public int NearTotalUnits { get { return near_.GetTotalUnits(currentMeter_); } }
 	
@@ -460,10 +480,9 @@ public abstract class MusicBase : MonoBehaviour
 		}
 	}
 
-	public void PlayFrom(int sequenceIndex, Timing seekTiming)
+	public void Seek(Timing seekTiming, int sequenceIndex = 0)
 	{
-		SeekInternal(sequenceIndex, seekTiming);
-		Play();
+		SeekInternal(seekTiming, sequenceIndex);
 	}
 
 	public void Stop()
@@ -524,7 +543,7 @@ public abstract class MusicBase : MonoBehaviour
 
 	protected abstract bool ReadyInternal();
 
-	protected abstract void SeekInternal(int sequenceIndex, Timing seekTiming);
+	protected abstract void SeekInternal(Timing seekTiming, int sequenceIndex = 0);
 
 	protected abstract bool PlayInternal();
 
