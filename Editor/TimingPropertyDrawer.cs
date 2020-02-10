@@ -36,8 +36,6 @@ public class TimingPropertyDrawer : PropertyDrawer
 	{
 		Init(property);
 		var fieldRect = position;
-		// インデントされた位置のRectが欲しければこっちを使う
-		var indentedFieldRect = EditorGUI.IndentedRect(fieldRect);
 		fieldRect.height = EditorGUIUtility.singleLineHeight;
 
 		// Prefab化した後プロパティに変更を加えた際に太字にしたりする機能を加えるためPropertyScopeを使う
