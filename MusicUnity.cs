@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -433,14 +433,20 @@ public class MusicUnity : MusicBase
 		syncScheduledDSPTime_ = 0.0;
 		ModeTransitionState = EModeTransitionState.Invalid;
 		TransitionState = ETransitionState.Invalid;
+
+		ResetSectionClips();
+		ResetModeLayerVolumes();
 	}
 
 	// timing
 
 	protected override void UpdateTimingInternal()
 	{
-		currentSample_ = musicSources_[0].timeSamples;
-		currentMeter_ = GetMeterFromSample(currentSample_);
+		if( musicSources_[0].isPlaying )
+		{
+			currentSample_ = musicSources_[0].timeSamples;
+			currentMeter_ = GetMeterFromSample(currentSample_);
+		}
 
 		UpdateHorizontalState();
 		UpdateVerticalState();
@@ -495,6 +501,8 @@ public class MusicUnity : MusicBase
 		#if UNITY_EDITOR
 		UpdateGameObjectNames();
 		#endif
+		
+		UpdateQuantizedAudio();
 	}
 
 	protected void UpdateHorizontalState()
@@ -659,6 +667,8 @@ public class MusicUnity : MusicBase
 	{
 		if( index < 0 || Sections.Length <= index
 			// インデックス範囲外
+			|| index == sectionIndex_
+			// 今のセクションと同じ
 			|| index == nextSectionIndex_
 			// 既に遷移確定済み
 			|| (requenstedTransition_ != null && requenstedTransition_.SectionIndex == index) )
@@ -783,6 +793,64 @@ public class MusicUnity : MusicBase
 
 	#endregion
 
+	class QuantizedAudio
+	{
+		public AudioSource source_;
+		public double syncedDspTime_;
+		public Action action_;
+	}
+	List<QuantizedAudio> quantizedAudioList_ = new List<QuantizedAudio>();
+
+	public bool QuantizePlay(AudioSource audio, Action action = null, Music.SyncType syncType = Music.SyncType.Unit, int syncFactor = 1)
+	{
+		int syncPointSample = 0;
+		var currentSample = musicSources_[0].timeSamples;
+		if( FindSyncPoint(syncType, syncFactor, currentSample, (int)(currentMeter_.SecPerUnit * sampleRate_) / 4, out syncPointSample) )
+		{
+			var quantizedAudio = new QuantizedAudio();
+			quantizedAudio.action_ = action;
+			quantizedAudio.source_ = audio;
+			quantizedAudio.syncedDspTime_ = AudioSettings.dspTime + (double)(syncPointSample - currentSample) / sampleRate_;
+			quantizedAudio.source_.PlayScheduled(quantizedAudio.syncedDspTime_);
+			quantizedAudioList_.Add(quantizedAudio);
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+	public bool IsPlayScheduled(AudioSource audio)
+	{
+		if( quantizedAudioList_.Find(q => q.source_ == audio) != null )
+		{
+			return true;
+		}
+		return false;
+	}
+
+	private void UpdateQuantizedAudio()
+	{
+		foreach( var quantizedAudio in quantizedAudioList_.FindAll(a => a.syncedDspTime_ <= AudioSettings.dspTime) )
+		{
+			if( quantizedAudio.syncedDspTime_ <= AudioSettings.dspTime )
+			{
+				if( quantizedAudio.action_ != null )
+				{
+					quantizedAudio.action_.Invoke();
+				}
+			}
+		}
+
+		quantizedAudioList_.RemoveAll(a => a.syncedDspTime_ <= AudioSettings.dspTime);
+	}
+
+	public void SetVolume(float volume)
+	{
+		Volume = volume;
+		UpdateVolumes();
+	}
 
 	#region private functions
 
@@ -988,6 +1056,7 @@ public class MusicUnity : MusicBase
 		AudioSource[] oldTracks = musicSources_;
 		musicSources_ = transitionMusicSources_;
 		transitionMusicSources_ = oldTracks;
+		currentSample_ = musicSources_[0].timeSamples;
 		// インデックス切り替え
 		prevSectionIndex_ = sectionIndex_;
 		sectionIndex_ = nextSectionIndex_;
@@ -1082,24 +1151,20 @@ public class MusicUnity : MusicBase
 		{
 			case Music.SyncType.Immediate:
 				syncPointSample = currentSample + entryPointSample;
-				break;
+				return true;
 			case Music.SyncType.ExitPoint:
 				syncPointSample = CurrentSection.ExitPointSample;
 				if( syncPointSample <= currentSample + entryPointSample )
 				{
 					return false;
 				}
-				break;
+				return true;
 			case Music.SyncType.Bar:
 				syncPointCandidateTiming.Set(currentTiming.Bar - (currentTiming.Bar - currentMeter.StartBar) % syncFactor + syncFactor, 0, 0);
 				syncPointSample = CurrentSection.GetSampleFromTiming(syncPointCandidateTiming);
 				while( syncPointSample <= currentSample + entryPointSample )
 				{
 					syncPointCandidateTiming.Add(syncFactor);
-					if( syncPointCandidateTiming > CurrentSection.ExitPointTiming )
-					{
-						return false;
-					}
 					syncPointSample = CurrentSection.GetSampleFromTiming(syncPointCandidateTiming);
 				}
 				break;
@@ -1111,10 +1176,6 @@ public class MusicUnity : MusicBase
 				{
 					syncPointCandidateTiming.Add(0, syncFactor, 0, currentMeter);
 					syncPointCandidateTiming.Fix(currentMeter);
-					if( syncPointCandidateTiming > CurrentSection.ExitPointTiming )
-					{
-						return false;
-					}
 					currentMeter = GetMeterFromTiming(syncPointCandidateTiming);
 					syncPointSample = CurrentSection.GetSampleFromTiming(syncPointCandidateTiming);
 				}
@@ -1127,10 +1188,6 @@ public class MusicUnity : MusicBase
 				{
 					syncPointCandidateTiming.Add(0, 0, syncFactor, currentMeter);
 					syncPointCandidateTiming.Fix(currentMeter);
-					if( syncPointCandidateTiming > CurrentSection.ExitPointTiming )
-					{
-						return false;
-					}
 					currentMeter = GetMeterFromTiming(syncPointCandidateTiming);
 					syncPointSample = CurrentSection.GetSampleFromTiming(syncPointCandidateTiming);
 				}
@@ -1160,6 +1217,10 @@ public class MusicUnity : MusicBase
 					return false;
 				}
 				break;
+		}
+		if( syncPointCandidateTiming > CurrentSection.ExitPointTiming )
+		{
+			return false;
 		}
 		return true;
 	}
@@ -1200,6 +1261,8 @@ public class MusicUnity : MusicBase
 		int entryPointSample = requestedSection.EntryPointSample;
 		int currentSample = currentSample_;
 		int syncPointSample = 0;
+
+		requenstedTransition_ = null;
 		if( FindSyncPoint(param.SyncType, param.SyncFactor, currentSample, entryPointSample, out syncPointSample) == false )
 		{
 			requenstedTransition_ = param;

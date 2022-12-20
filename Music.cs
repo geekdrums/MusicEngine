@@ -128,6 +128,10 @@ public static class Music
 	{
 		return current_ != null ? current_.IsJustChangedAt(t.Bar, t.Beat, t.Unit) : false;
 	}
+	public static bool IsJustLooped()
+	{
+		return current_ != null ? current_.IsJustLooped() : false;
+	}
 
 	// near changed
 
@@ -459,6 +463,10 @@ public abstract class MusicBase : MonoBehaviour
 	{
 		return (isJustChanged_ && (oldJust_ < t && t <= just_)) || (isJustLooped_ && (oldJust_ < t || t <= just_));
 	}
+	public bool IsJustLooped()
+	{
+		return isJustLooped_;
+	}
 
 	#endregion
 
@@ -587,6 +595,8 @@ public abstract class MusicBase : MonoBehaviour
 	private Timing oldJust_ = new Timing(-1, 0, 0);
 	// 1フレーム前のNearタイミング。
 	private Timing oldNear_ = new Timing(-1, 0, 0);
+	// 以前のシーケンスインデックス
+	private int oldSequenceIndex_ = 0;
 	// 今のフレームでjust_が変化したフラグ。
 	private bool isJustChanged_ = false;
 	// 今のフレームでnear_が変化したフラグ。
@@ -699,7 +709,6 @@ public abstract class MusicBase : MonoBehaviour
 		isJustLooped_ = false;
 		isNearLooped_ = false;
 
-		int oldSequenceIndex = SequenceIndex;
 		UpdateTimingInternal();
 		CalcTimingAndFraction(ref just_, out fractionFromJust_);
 
@@ -725,12 +734,12 @@ public abstract class MusicBase : MonoBehaviour
 
 			isJustChanged_ = (just_.Equals(oldJust_) == false);
 			isNearChanged_ = (near_.Equals(oldNear_) == false);
-			isJustLooped_ = isJustChanged_ && just_ < oldJust_;
-			isNearLooped_ = isNearChanged_ && near_ < oldNear_;
+			isJustLooped_ = isJustChanged_ && (just_ < oldJust_ || (oldJust_.Bar < 0 && just_.Bar >= 0));
+			isNearLooped_ = isNearChanged_ && (near_ < oldNear_ || (oldNear_.Bar < 0 && near_.Bar >= 0));
 
 			if( isJustLooped_ )
 			{
-				if( oldSequenceIndex != SequenceIndex )
+				if( oldSequenceIndex_ != SequenceIndex )
 				{
 					OnHorizontalSequenceChanged();
 				}
@@ -759,6 +768,7 @@ public abstract class MusicBase : MonoBehaviour
 
 	protected virtual void OnHorizontalSequenceChanged()
 	{
+		oldSequenceIndex_ = SequenceIndex;
 		numRepeat_ = 0;
 		sequenceEndTiming_ = GetSequenceEndTiming();
 	}

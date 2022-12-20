@@ -125,6 +125,8 @@ public class MusicUnityEditor : Editor
 			sectionTransitionOverridesListProperty_.isExpanded = EditorGUILayout.Foldout(sectionTransitionOverridesListProperty_.isExpanded, "Section Transition Overrides");
 			if( sectionTransitionOverridesListProperty_.isExpanded )
 			{
+				EditorGUI.indentLevel++;
+				sectionTransitionOverridesListProperty_.arraySize = EditorGUILayout.IntField("Size", sectionTransitionOverridesListProperty_.arraySize);
 				if( sectionTransitionOverridesListProperty_.arraySize > 0 )
 				{
 					sectionListDisplayOptionsWithAny_ = new string[music.Sections.Length + 1];
@@ -138,8 +140,6 @@ public class MusicUnityEditor : Editor
 					}
 				}
 
-				EditorGUI.indentLevel++;
-				sectionTransitionOverridesListProperty_.arraySize = EditorGUILayout.IntField("Size", sectionTransitionOverridesListProperty_.arraySize);
 				for( int i = 0; i < sectionTransitionOverridesListProperty_.arraySize; ++i )
 				{
 					DrawSectionTransitionOverrideParam(sectionTransitionOverridesListProperty_.GetArrayElementAtIndex(i));

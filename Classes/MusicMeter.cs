@@ -178,7 +178,9 @@ public class MusicMeterBySample : MusicMeter
 			int bar = (int)(meterSamples / SamplesPerBar);
 			int beat = (int)((meterSamples - bar * SamplesPerBar) / SamplesPerBeat);
 			int unit = (int)(((meterSamples - bar * SamplesPerBar) - beat * SamplesPerBeat) / SamplesPerUnit);
-			return new Timing(bar + StartBar, beat, unit);
+			var res = new Timing(bar + StartBar, beat, unit);
+			res.Fix(this);
+			return res;
 		}
 	}
 }
