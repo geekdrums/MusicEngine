@@ -6,6 +6,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Xml;
+using CriWare;
+
 
 [RequireComponent(typeof(CriAtomSource))]
 public class MusicADX2 : MusicBase
@@ -71,6 +73,13 @@ public class MusicADX2 : MusicBase
 	public BlockInfo NextBlock { get { return BlockInfos[nextBlockIndex_]; } }
 	public override int SequenceIndex { get { return currentBlockIndex_; } }
 	public override string SequenceName { get { return BlockInfos[currentBlockIndex_].BlockName; } }
+
+	public void SetAisacControl(string controlName, float value)
+	{
+		atomSource_.SetAisacControl(controlName, value);
+	}
+
+	public CriAtomSource Source { get { return atomSource_; } }
 
 	#endregion
 
