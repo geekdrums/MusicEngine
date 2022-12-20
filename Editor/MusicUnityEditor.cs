@@ -218,32 +218,69 @@ public class MusicUnityEditor : Editor
 				}
 			}
 			GUILayout.EndHorizontal();
-			
-			if( music.State == Music.PlayState.Playing || music.State == Music.PlayState.Suspended )
+
+			EditorGUI.BeginDisabledGroup(true);
 			{
-				EditorGUILayout.BeginHorizontal();
-				int sequenceIndex = EditorGUILayout.Popup("Section", music.SequenceIndex, sectionListDisplayOptions_);
-				if( sequenceIndex != music.SequenceIndex )
-				{
-					music.SetHorizontalSequenceByIndex(sequenceIndex);
-				}
+				EditorGUILayout.TextField("State", music.State.ToString());
+				EditorGUILayout.TextField("TransitionState", music.TransitionState.ToString());
 				if( music.NextSectionIndex >= 0 && music.NextSectionIndex != music.SectionIndex )
 				{
 					EditorGUILayout.LabelField("to " + sectionListDisplayOptions_[music.NextSectionIndex], GUILayout.Width(120));
 				}
-				EditorGUILayout.EndHorizontal();
-
-				EditorGUILayout.BeginHorizontal();
-				int modeIndex = EditorGUILayout.Popup("Mode", music.ModeIndex, modeListDisplayOptions_);
-				if( modeIndex != music.ModeIndex )
-				{
-					music.SetVerticalMixByIndex(modeIndex);
-				}
+				EditorGUILayout.TextField("ModeTransitionState", music.ModeTransitionState.ToString());
 				if( music.NextModeIndex >= 0 && music.NextModeIndex != music.ModeIndex )
 				{
 					EditorGUILayout.LabelField("to " + modeListDisplayOptions_[music.NextModeIndex], GUILayout.Width(120));
 				}
-				EditorGUILayout.EndHorizontal();
+			}
+			EditorGUI.EndDisabledGroup();
+
+			if( music.State == Music.PlayState.Playing || music.State == Music.PlayState.Suspended )
+			{
+				for( int i = 0; i < sectionListDisplayOptions_.Length; ++i )
+				{
+					if( i != music.SequenceIndex )
+					{
+						var buttonText = sectionListDisplayOptions_[i];
+						if( i == music.NextSectionIndex )
+						{
+							buttonText = "transition to " + buttonText;
+						}
+						if( GUILayout.Button(buttonText) )
+						{
+							music.SetHorizontalSequenceByIndex(i);
+						}
+					}
+					else
+					{
+						EditorGUI.BeginDisabledGroup(true);
+						GUILayout.Button(sectionListDisplayOptions_[i]);
+						EditorGUI.EndDisabledGroup();
+					}
+				}
+
+
+				for( int i = 0; i < modeListDisplayOptions_.Length; ++i )
+				{
+					if( i != music.ModeIndex )
+					{
+						var buttonText = modeListDisplayOptions_[i];
+						if( i == music.NextModeIndex )
+						{
+							buttonText = "transition to " + buttonText;
+						}
+						if( GUILayout.Button(buttonText) )
+						{
+							music.SetVerticalMixByIndex(i);
+						}
+					}
+					else
+					{
+						EditorGUI.BeginDisabledGroup(true);
+						GUILayout.Button(modeListDisplayOptions_[i]);
+						EditorGUI.EndDisabledGroup();
+					}
+				}
 
 				EditorGUILayout.Slider("Seek Bar", music.MusicalTime, music.CurrentSection.EntryPointTiming.IsZero() ? 0 : -1, music.CurrentSection.ExitPointTiming.Bar);
 				EditorUtility.SetDirty(serializedObject.targetObject);
