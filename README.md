@@ -15,6 +15,9 @@ MusicEngine
 Unity単体での再生と、  
 オーディオミドルウェアのCRI ADX2/Audiokinetic Wwiseを使った再生に対応しています。
 
+Released under the MIT license  
+http://opensource.org/licenses/mit-license.php
+
 ## 利用方法:
 
 MusicEngineフォルダごとプロジェクトに追加してください。  
@@ -38,6 +41,8 @@ You can get musical timing information with Unity or CRI ADX2 / Audiokinetic Wwi
 
 And you can also use interactive music functions such as Horizontal Resequencing and Vertical Remixing.
 
+Released under the MIT license  
+http://opensource.org/licenses/mit-license.php
 
 ## How To Use:
 
@@ -54,3 +59,5 @@ If you use Audiokinetic Wwise, enable #Wwise in MusicWwise.cs.
 Add MusicWwise component and set Event property.
 
 If you have any questions or suggestions, please let me (@geekdrums) know.  
+
+
